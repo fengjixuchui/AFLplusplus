@@ -45,7 +45,7 @@ namespace {
 
       bool runOnModule(Module &M) override;
 
-#if __clang_major__ >= 4
+#if LLVM_VERSION_MAJOR >= 4
       StringRef getPassName() const override {
 #else
       const char * getPassName() const override {
@@ -87,6 +87,7 @@ BasicBlock* SplitSwitchesTransform::switchConvert(CaseVector Cases, std::vector<
   std::vector<uint8_t> setSizes;
   std::vector<std::set<uint8_t>> byteSets(BytesInValue, std::set<uint8_t>());
 
+  assert(ValTypeBitWidth >= 8 && ValTypeBitWidth <= 64);
 
   /* for each of the possible cases we iterate over all bytes of the values
    * build a set of possible values at each byte position in byteSets */
@@ -98,6 +99,8 @@ BasicBlock* SplitSwitchesTransform::switchConvert(CaseVector Cases, std::vector<
     }
   }
 
+  /* find the index of the first byte position that was not yet checked. then
+   * save the number of possible values at that byte position */
   unsigned smallestIndex = 0;
   unsigned smallestSize = 257;
   for(unsigned i = 0; i < byteSets.size(); i++) {
@@ -152,7 +155,7 @@ BasicBlock* SplitSwitchesTransform::switchConvert(CaseVector Cases, std::vector<
         }
         PHINode *PN = cast<PHINode>(I);
 
-        /* Only update the first occurence. */
+        /* Only update the first occurrence. */
         unsigned Idx = 0, E = PN->getNumIncomingValues();
         for (; Idx != E; ++Idx) {
           if (PN->getIncomingBlock(Idx) == OrigBlock) {
@@ -235,9 +238,14 @@ bool SplitSwitchesTransform::splitSwitches(Module &M) {
     /* this is the value we are switching on */
     Value *Val = SI->getCondition();
     BasicBlock* Default = SI->getDefaultDest();
+    unsigned bitw = Val->getType()->getIntegerBitWidth();
 
-    /* If there is only the default destination, don't bother with the code below. */
-    if (!SI->getNumCases()) {
+    errs() << "switch: " << SI->getNumCases() << " cases " << bitw << " bit\n";
+
+    /* If there is only the default destination or the condition checks 8 bit or less, don't bother with the code below. */
+    if (!SI->getNumCases() || bitw <= 8) {
+      if (getenv("AFL_QUIET") == NULL)
+        errs() << "skip trivial switch..\n";
       continue;
     }
 
@@ -254,12 +262,14 @@ bool SplitSwitchesTransform::splitSwitches(Module &M) {
     /* Prepare cases vector. */
     CaseVector Cases;
     for (SwitchInst::CaseIt i = SI->case_begin(), e = SI->case_end(); i != e; ++i)
-#if __clang_major__ < 7
+#if LLVM_VERSION_MAJOR < 5
       Cases.push_back(CaseExpr(i.getCaseValue(), i.getCaseSuccessor()));
 #else
       Cases.push_back(CaseExpr(i->getCaseValue(), i->getCaseSuccessor()));
 #endif
-    std::vector<bool> bytesChecked(Cases[0].Val->getBitWidth() / 8, false);
+    /* bugfix thanks to pbst
+     * round up bytesChecked (in case getBitWidth() % 8 != 0) */
+    std::vector<bool> bytesChecked((7 + Cases[0].Val->getBitWidth()) / 8, false);
     BasicBlock* SwitchBlock = switchConvert(Cases, bytesChecked, OrigBlock, NewDefault, Val, 0);
 
     /* Branch to our shiny new if-then stuff... */
@@ -276,7 +286,7 @@ bool SplitSwitchesTransform::splitSwitches(Module &M) {
      }
      PHINode *PN = cast<PHINode>(I);
 
-     /* Only update the first occurence. */
+     /* Only update the first occurrence. */
      unsigned Idx = 0, E = PN->getNumIncomingValues();
      for (; Idx != E; ++Idx) {
        if (PN->getIncomingBlock(Idx) == OrigBlock) {
@@ -293,7 +303,8 @@ bool SplitSwitchesTransform::splitSwitches(Module &M) {
 
 bool SplitSwitchesTransform::runOnModule(Module &M) {
 
-  llvm::errs() << "Running split-switches-pass by laf.intel@gmail.com\n"; 
+  if (getenv("AFL_QUIET") == NULL)
+    llvm::errs() << "Running split-switches-pass by laf.intel@gmail.com\n"; 
   splitSwitches(M);
   verifyModule(M);
 

@@ -45,7 +45,7 @@ namespace {
 
       bool runOnModule(Module &M) override;
 
-#if __clang_major__ < 4
+#if LLVM_VERSION_MAJOR < 4
       const char * getPassName() const override {
 #else
       StringRef getPassName() const override {
@@ -69,10 +69,16 @@ bool CompareTransform::transformCmps(Module &M, const bool processStrcmp, const 
   IntegerType *Int8Ty = IntegerType::getInt8Ty(C);
   IntegerType *Int32Ty = IntegerType::getInt32Ty(C);
   IntegerType *Int64Ty = IntegerType::getInt64Ty(C);
-  Constant* c = M.getOrInsertFunction("tolower",
+
+#if LLVM_VERSION_MAJOR < 9
+  Constant* 
+#else
+  FunctionCallee
+#endif
+               c = M.getOrInsertFunction("tolower",
                                          Int32Ty,
                                          Int32Ty
-#if __clang_major__ < 7
+#if LLVM_VERSION_MAJOR < 5
 					 , nullptr
 #endif
 					 );
@@ -138,7 +144,7 @@ bool CompareTransform::transformCmps(Module &M, const bool processStrcmp, const 
           if (!isStrcmp && !isMemcmp && !isStrncmp && !isStrcasecmp && !isStrncasecmp)
             continue;
 
-          /* is a str{n,}{case,}cmp/memcmp, check is we have
+          /* is a str{n,}{case,}cmp/memcmp, check if we have
            * str{case,}cmp(x, "const") or str{case,}cmp("const", x)
            * strn{case,}cmp(x, "const", ..) or strn{case,}cmp("const", x, ..)
            * memcmp(x, "const", ..) or memcmp("const", x, ..) */
@@ -178,6 +184,7 @@ bool CompareTransform::transformCmps(Module &M, const bool processStrcmp, const 
 
     Value *Str1P = callInst->getArgOperand(0), *Str2P = callInst->getArgOperand(1);
     StringRef Str1, Str2, ConstStr;
+    std::string TmpConstStr;
     Value *VarStr;
     bool HasStr1 = getConstantStringInfo(Str1P, Str1);
     getConstantStringInfo(Str2P, Str2);
@@ -196,15 +203,21 @@ bool CompareTransform::transformCmps(Module &M, const bool processStrcmp, const 
     }
 
     if (HasStr1) {
-      ConstStr = Str1;
+      TmpConstStr = Str1.str();
       VarStr = Str2P;
       constLen = isMemcmp ? sizedLen : GetStringLength(Str1P);
     }
     else {
-      ConstStr = Str2;
+      TmpConstStr = Str2.str();
       VarStr = Str1P;
       constLen = isMemcmp ? sizedLen : GetStringLength(Str2P);
     }
+
+    /* properly handle zero terminated C strings by adding the terminating 0 to
+     * the StringRef (in comparison to std::string a StringRef has built-in
+     * runtime bounds checking, which makes debugging easier) */
+    TmpConstStr.append("\0", 1); ConstStr = StringRef(TmpConstStr);
+
     if (isSizedcmp && constLen > sizedLen) {
       constLen = sizedLen;
     }
@@ -218,7 +231,11 @@ bool CompareTransform::transformCmps(Module &M, const bool processStrcmp, const 
     BranchInst::Create(end_bb, next_bb);
     PHINode *PN = PHINode::Create(Int32Ty, constLen + 1, "cmp_phi");
 
+#if LLVM_VERSION_MAJOR < 8
     TerminatorInst *term = bb->getTerminator();
+#else
+    Instruction *term = bb->getTerminator();
+#endif
     BranchInst::Create(next_bb, bb);
     term->eraseFromParent();
 
@@ -240,6 +257,7 @@ bool CompareTransform::transformCmps(Module &M, const bool processStrcmp, const 
         std::vector<Value *> args;
         args.push_back(load);
         load = IRB.CreateCall(tolowerFn, args, "tmp");
+        load = IRB.CreateTrunc(load, Int8Ty);
       }
       Value *isub;
       if (HasStr1)
@@ -255,10 +273,9 @@ bool CompareTransform::transformCmps(Module &M, const bool processStrcmp, const 
         next_bb =  BasicBlock::Create(C, "cmp_added", end_bb->getParent(), end_bb);
         BranchInst::Create(end_bb, next_bb);
 
-        TerminatorInst *term = cur_bb->getTerminator();
         Value *icmp = IRB.CreateICmpEQ(isub, ConstantInt::get(Int8Ty, 0));
         IRB.CreateCondBr(icmp, next_bb, end_bb);
-        term->eraseFromParent();
+        cur_bb->getTerminator()->eraseFromParent();
       } else {
         //IRB.CreateBr(end_bb);
       }
@@ -283,7 +300,8 @@ bool CompareTransform::transformCmps(Module &M, const bool processStrcmp, const 
 
 bool CompareTransform::runOnModule(Module &M) {
 
-  llvm::errs() << "Running compare-transform-pass by laf.intel@gmail.com, extended by heiko@hexco.de\n";
+  if (getenv("AFL_QUIET") == NULL)
+    llvm::errs() << "Running compare-transform-pass by laf.intel@gmail.com, extended by heiko@hexco.de\n";
   transformCmps(M, true, true, true, true, true);
   verifyModule(M);
 

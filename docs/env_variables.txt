@@ -7,8 +7,8 @@ Environmental variables
   users or for some types of custom fuzzing setups. See README for the general
   instruction manual.
 
-1) Settings for afl-gcc, afl-clang, and afl-as
-----------------------------------------------
+1) Settings for afl-gcc, afl-clang, and afl-as - and gcc_plugin afl-gcc-fast
+----------------------------------------------------------------------------
 
 Because they can't directly accept command-line options, the compile-time
 tools make fairly broad use of environmental variables:
@@ -68,8 +68,11 @@ tools make fairly broad use of environmental variables:
   - Setting AFL_QUIET will prevent afl-cc and afl-as banners from being
     displayed during compilation, in case you find them distracting.
 
-2) Settings for afl-clang-fast
-------------------------------
+  - Setting AFL_CAL_FAST will speed up the initial calibration, if the
+    application is very slow
+
+2) Settings for afl-clang-fast / afl-clang-fast++
+-------------------------------------------------
 
 The native LLVM instrumentation helper accepts a subset of the settings
 discussed in section #1, with the exception of:
@@ -79,9 +82,57 @@ discussed in section #1, with the exception of:
   - TMPDIR and AFL_KEEP_ASSEMBLY, since no temporary assembly files are
     created.
 
-Note that AFL_INST_RATIO will behave a bit differently than for afl-gcc,
-because functions are *not* instrumented unconditionally - so low values
-will have a more striking effect. For this tool, 0 is not a valid choice.
+  - AFL_INST_RATIO, as we switched for instrim instrumentation which
+    is more effective but makes not much sense together with this option.
+
+Then there are a few specific features that are only available in llvm_mode:
+
+  LAF-INTEL
+  =========
+    This great feature will split compares to series of single byte comparisons
+    to allow afl-fuzz to find otherwise rather impossible paths. It is not
+    restricted to Intel CPUs ;-)
+
+    - Setting AFL_LLVM_LAF_SPLIT_SWITCHES will split switch()es
+
+    - Setting AFL_LLVM_LAF_TRANSFORM_COMPARES will split string compare functions
+
+    - Setting AFL_LLVM_LAF_SPLIT_COMPARES will split > 8 bit CMP instructions
+
+    See llvm_mode/README.laf-intel for more information. 
+
+  WHITELIST
+  =========
+    This feature allows selectively instrumentation of the source
+
+    - Setting AFL_LLVM_WHITELIST with a filename will only instrument those
+      files that match the names listed in this file.
+
+    See llvm_mode/README.whitelist for more information.
+
+  INSTRIM
+  =======
+    This feature increases the speed by whopping 20% but at the cost of a
+    lower path discovery and therefore coverage.
+
+    - Setting AFL_LLVM_INSTRIM activates this mode
+
+    - Setting AFL_LLVM_INSTRIM_LOOPHEAD=1 expands on INSTRIM to optimize loops.
+      afl-fuzz will only be able to see the path the loop took, but not how
+      many times it was called (unless it is a complex loop).
+
+    See llvm_mode/README.instrim
+
+  NOT_ZERO
+  ========
+
+    - Setting AFL_LLVM_NOT_ZERO=1 during compilation will use counters
+      that skip zero on overflow. This is the default for llvm >= 9,
+      however for llvm versions below that this will increase an unnecessary
+      slowdown due a performance issue that is only fixed in llvm 9+.
+      This feature increases path discovery by a little bit.
+
+    See llvm_mode/README.neverzero
 
 3) Settings for afl-fuzz
 ------------------------
@@ -132,8 +183,8 @@ checks or alter some of the more exotic semantics of the tool:
 
   - AFL_TMPDIR is used to write the .cur_input file to if exists, and in
     the normal output directory otherwise. You would use this to point to
-    a ramdisk/tmpfs. This increases the speed by a very minimal value but
-    also reduces the stress on SSDs.
+    a ramdisk/tmpfs. This increases the speed by a small value but also
+    reduces the stress on SSDs.
 
   - When developing custom instrumentation on top of afl-fuzz, you can use
     AFL_SKIP_BIN_CHECK to inhibit the checks for non-instrumented binaries
@@ -149,6 +200,11 @@ checks or alter some of the more exotic semantics of the tool:
   - Setting AFL_POST_LIBRARY allows you to configure a postprocessor for
     mutated files - say, to fix up checksums. See experimental/post_library/
     for more.
+
+  - For AFL_PYTHON_MODULE and AFL_PYTHON_ONLY - they require to be compiled
+    with -DUSE_PYTHON. Please see docs/python_mutators.txt
+    This feature allows to configure custom mutators which can be very helpful
+    in e.g. fuzzing XML or other highly flexible structured input.
 
   - AFL_FAST_CAL keeps the calibration stage about 2.5x faster (albeit less
     precise), which can help when starting a session against a slow target.
@@ -174,6 +230,9 @@ checks or alter some of the more exotic semantics of the tool:
     processing the first queue entry; and AFL_BENCH_UNTIL_CRASH causes it to
     exit soon after the first crash is found.
 
+  - Setting AFL_DEBUG_CHILD_OUTPUT will not suppress the child output.
+    Not pretty but good for debugging purposes.
+
 4) Settings for afl-qemu-trace
 ------------------------------
 
@@ -185,6 +244,10 @@ The QEMU wrapper used to instrument binary-only code supports several settings:
 
   - Setting AFL_INST_LIBS causes the translator to also instrument the code
     inside any dynamically linked libraries (notably including glibc).
+  
+  - Setting AFL_QEMU_COMPCOV enables the CompareCoverage tracing of all
+    cmp and sub in x86 and x86_64. Support for other architectures and
+    comparison functions (mem/strcmp et al.) is planned.
 
   - The underlying QEMU binary will recognize any standard "user space
     emulation" variables (e.g., QEMU_STACK_SIZE), but there should be no
