@@ -3,10 +3,17 @@
 # american fuzzy lop - QEMU build script
 # --------------------------------------
 #
-# Written by Andrew Griffiths <agriffiths@google.com> and
-#            Michal Zalewski <lcamtuf@google.com>
+# Originally written by Andrew Griffiths <agriffiths@google.com> and
+#                       Michal Zalewski
+#
+# TCG instrumentation and block chaining support by Andrea Biondo
+#                                    <andrea.biondo965@gmail.com>
+#
+# QEMU 3.1.1 port, TCG thread-safety, CompareCoverage and NeverZero
+# counters by Andrea Fioraldi <andreafioraldi@gmail.com>
 #
 # Copyright 2015, 2016, 2017 Google Inc. All rights reserved.
+# Copyright 2019 AFLplusplus Project. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,9 +30,9 @@
 #
 
 
-VERSION="3.1.0"
+VERSION="3.1.1"
 QEMU_URL="http://download.qemu-project.org/qemu-${VERSION}.tar.xz"
-QEMU_SHA384="0318f2b5a36eafbf17bca0f914567dfa5e8a3cd6ff83bb46fe49a0079cd71ddd3ec4267c6c62a03f9e26e05cc80e6d4b"
+QEMU_SHA384="28ff22ec4b8c957309460aa55d0b3188e971be1ea7dfebfb2ecc7903cd20cfebc2a7c97eedfcc7595f708357f1623f8b"
 
 echo "================================================="
 echo "AFL binary-only instrumentation QEMU build script"
@@ -93,7 +100,10 @@ if [ ! "$CKSUM" = "$QEMU_SHA384" ]; then
 
   echo "[*] Downloading QEMU ${VERSION} from the web..."
   rm -f "$ARCHIVE"
-  wget -O "$ARCHIVE" -- "$QEMU_URL" || exit 1
+  OK=
+  while [ -z "$OK" ]; do
+    wget -c -O "$ARCHIVE" -- "$QEMU_URL" && OK=1
+  done
 
   CKSUM=`sha384sum -- "$ARCHIVE" 2>/dev/null | cut -d' ' -f1`
 
@@ -105,7 +115,8 @@ if [ "$CKSUM" = "$QEMU_SHA384" ]; then
 
 else
 
-  echo "[-] Error: signature mismatch on $ARCHIVE (perhaps download error?)."
+  echo "[-] Error: signature mismatch on $ARCHIVE (perhaps download error?), removing archive ..."
+  rm -f "$ARCHIVE"
   exit 1
 
 fi
@@ -116,6 +127,13 @@ rm -rf "qemu-${VERSION}" || exit 1
 tar xf "$ARCHIVE" || exit 1
 
 echo "[+] Unpacking successful."
+
+if [ -n "$HOST" ]; then
+  echo "[+] Configuring host architecture to $HOST..."
+  CROSS_PREFIX=$HOST-
+else
+  CROSS_PREFIX=
+fi
 
 echo "[*] Configuring QEMU for $CPU_TARGET..."
 
@@ -134,15 +152,37 @@ patch -p1 <../patches/syscall.diff || exit 1
 patch -p1 <../patches/translate-all.diff || exit 1
 patch -p1 <../patches/tcg.diff || exit 1
 patch -p1 <../patches/i386-translate.diff || exit 1
+patch -p1 <../patches/arm-translate.diff || exit 1
+patch -p1 <../patches/i386-ops_sse.diff || exit 1
+patch -p1 <../patches/i386-fpu_helper.diff || exit 1
+patch -p1 <../patches/softfloat.diff || exit 1
 
 echo "[+] Patching done."
 
-# --enable-pie seems to give a couple of exec's a second performance
-# improvement, much to my surprise. Not sure how universal this is..
+if [ "$STATIC" = "1" ]; then
 
-CFLAGS="-O3 -ggdb" ./configure --disable-system \
-  --enable-linux-user --disable-gtk --disable-sdl --disable-vnc \
-  --target-list="${CPU_TARGET}-linux-user" --enable-pie --enable-kvm || exit 1
+  CFLAGS="-O3 -ggdb" ./configure --disable-bsd-user --disable-guest-agent --disable-strip --disable-werror \
+	  --disable-gcrypt --disable-debug-info --disable-debug-tcg --enable-docs --disable-tcg-interpreter \
+	  --enable-attr --disable-brlapi --disable-linux-aio --disable-bzip2 --disable-bluez --disable-cap-ng \
+	  --disable-curl --disable-fdt --disable-glusterfs --disable-gnutls --disable-nettle --disable-gtk \
+	  --disable-rdma --disable-libiscsi --disable-vnc-jpeg --enable-kvm --disable-lzo --disable-curses \
+	  --disable-libnfs --disable-numa --disable-opengl --disable-vnc-png --disable-rbd --disable-vnc-sasl \
+	  --disable-sdl --disable-seccomp --disable-smartcard --disable-snappy --disable-spice --disable-libssh2 \
+	  --disable-libusb --disable-usb-redir --disable-vde --disable-vhost-net --disable-virglrenderer \
+	  --disable-virtfs --disable-vnc --disable-vte --disable-xen --disable-xen-pci-passthrough --disable-xfsctl \
+	  --enable-linux-user --disable-system --disable-blobs --disable-tools \
+	  --target-list="${CPU_TARGET}-linux-user" --static --disable-pie --cross-prefix=$CROSS_PREFIX || exit 1
+
+else
+
+  # --enable-pie seems to give a couple of exec's a second performance
+  # improvement, much to my surprise. Not sure how universal this is..
+  
+  CFLAGS="-O3 -ggdb" ./configure --disable-system \
+    --enable-linux-user --disable-gtk --disable-sdl --disable-vnc \
+    --target-list="${CPU_TARGET}-linux-user" --enable-pie --enable-kvm $CROSS_PREFIX || exit 1
+
+fi
 
 echo "[+] Configuration complete."
 
@@ -193,11 +233,19 @@ if [ "$ORIG_CPU_TARGET" = "" ]; then
   echo "[+] Instrumentation tests passed. "
   echo "[+] All set, you can now use the -Q mode in afl-fuzz!"
 
+  cd qemu_mode || exit 1
+
 else
 
   echo "[!] Note: can't test instrumentation when CPU_TARGET set."
   echo "[+] All set, you can now (hopefully) use the -Q mode in afl-fuzz!"
 
 fi
+
+echo "[+] Building libcompcov ..."
+make -C libcompcov && echo "[+] libcompcov ready"
+echo "[+] Building unsigaction ..."
+make -C unsigaction && echo "[+] unsigaction ready"
+echo "[+] All done for qemu_mode, enjoy!"
 
 exit 0

@@ -1,40 +1,77 @@
 # american fuzzy lop plus plus (afl++)
 
-  Release Version: 2.53c 
-  Github Version: 2.53d
+  ![Travis State](https://api.travis-ci.com/vanhauser-thc/AFLplusplus.svg?branch=master)
+
+  Release Version: 2.59c 
+
+  Github Version: 2.59d
+
+  includes all necessary/interesting changes from Google's afl 2.56b
 
 
   Originally developed by Michal "lcamtuf" Zalewski.
 
   Repository: [https://github.com/vanhauser-thc/AFLplusplus](https://github.com/vanhauser-thc/AFLplusplus)
 
-  afl++ is maintained by Marc Heuse <mh@mh-sec.de>, Heiko Eißfeldt
-  <heiko.eissfeldt@hexco.de> and Andrea Fioraldi <andreafioraldi@gmail.com>.
+  afl++ is maintained by Marc "van Hauser" Heuse <mh@mh-sec.de>,
+  Heiko "hexcoder-" Eißfeldt <heiko.eissfeldt@hexco.de> and
+  Andrea Fioraldi <andreafioraldi@gmail.com>.
+
+  Note that although afl now has a Google afl repository [https://github.com/Google/afl](https://github.com/Google/afl),
+  it is unlikely to receive any noteable enhancements: [https://twitter.com/Dor3s/status/1154737061787660288](https://twitter.com/Dor3s/status/1154737061787660288)
+
 
 ## The enhancements compared to the original stock afl
 
   Many improvements were made over the official afl release - which did not
-  get any improvements since November 2017.
+  get any feature improvements since November 2017.
 
-  Among others afl++ has, e.g. more performant llvm_mode, supporting
-  llvm up to version 8, Qemu 3.1, more speed and crashfixes for Qemu,
-  laf-intel feature for Qemu (with libcompcov) and more.
+  Among other changes afl++ has a more performant llvm_mode, supports
+  llvm up to version 10, QEMU 3.1, more speed and crashfixes for QEMU,
+  better *BSD and Android support and much, much more.
 
-  Additionally the following patches have been integrated:
+  Additionally the following features and patches have been integrated:
 
   * AFLfast's power schedules by Marcel Böhme: [https://github.com/mboehme/aflfast](https://github.com/mboehme/aflfast)
 
-  * C. Hollers afl-fuzz Python mutator module and llvm_mode whitelist support: [https://github.com/choller/afl](https://github.com/choller/afl)
+  * The new excellent MOpt mutator: [https://github.com/puppet-meteor/MOpt-AFL](https://github.com/puppet-meteor/MOpt-AFL)
 
-  * the new excellent MOpt mutator: [https://github.com/puppet-meteor/MOpt-AFL](https://github.com/puppet-meteor/MOpt-AFL)
+  * InsTrim, a very effective CFG llvm_mode instrumentation implementation for large targets: [https://github.com/csienslab/instrim](https://github.com/csienslab/instrim)
 
-  * instrim, a very effective CFG llvm_mode instrumentation implementation for large targets: [https://github.com/csienslab/instrim](https://github.com/csienslab/instrim)
-
-  * unicorn_mode which allows fuzzing of binaries from completely different platforms (integration provided by domenukk)
+  * C. Holler's afl-fuzz Python mutator module and llvm_mode whitelist support: [https://github.com/choller/afl](https://github.com/choller/afl)
 
   * Custom mutator by a library (instead of Python) by kyakdan
 
+  * unicorn_mode which allows fuzzing of binaries from completely different platforms (integration provided by domenukk)
+
+  * laf-intel or CompCov support for llvm_mode, qemu_mode and unicorn_mode
+
+  * NeverZero patch for afl-gcc, llvm_mode, qemu_mode and unicorn_mode which prevents a wrapping map value to zero, increases coverage
+  
+  * Persistent mode and deferred forkserver for qemu_mode
+  
+  * Win32 PE binary-only fuzzing with QEMU and Wine
+
+  * Radamsa mutator (enable with `-R` to add or `-RR` to run it exclusivly).
+
+  * qbdi_mode: fuzz android native libraries via QBDI framework
+
+
   A more thorough list is available in the PATCHES file.
+
+  | Feature/Instrumentation | afl-gcc | llvm_mode | gcc_plugin | qemu_mode | unicorn_mode |
+  | ----------------------- |:-------:|:---------:|:----------:|:---------:|:------------:|
+  | laf-intel / CompCov     |         |     x     |            |  x86/arm  |   x86/arm    |
+  | NeverZero               |    x    |     x(1)  |      (2)   |     x     |      x       |
+  | Persistent mode         |         |     x     |     x      |    x86    |      x       |
+  | Whitelist               |         |     x     |     x      |           |              |
+  | InsTrim                 |         |     x     |            |           |              |
+
+  neverZero:
+
+  (1) only in LLVM >= 9.0 due to a bug in llvm in previous versions
+
+  (2) gcc create non-performant code, hence it is disabled in gcc_plugin
 
   So all in all this is the best-of AFL that is currently out there :-)
 
@@ -48,8 +85,55 @@
   read this file.
 
 
+## 0) Building and installing afl++
+
+afl++ has many build options.
+The easiest is to build and install everything:
+
+```shell
+$ make distrib
+$ sudo make install
+```
+
+Note that "make distrib" also builds llvm_mode, qemu_mode, unicorn_mode and
+more. If you just want plain afl then do "make all", however compiling and
+using at least llvm_mode is highly recommended for much better results -
+hence in this case 
+
+```shell
+$ make source-only
+```
+is what you should choose.
+
+These build options exist:
+
+* all: just the main afl++ binaries
+* binary-only: everything for binary-only fuzzing: qemu_mode, unicorn_mode, libdislocator, libtokencap, radamsa
+* source-only: everything for source code fuzzing: llvm_mode, libdislocator, libtokencap, radamsa
+* distrib: everything (for both binary-only and source code fuzzing)
+* install: installs everything you have compiled with the build options above
+* clean: cleans everything. for qemu_mode and unicorn_mode it means it deletes all downloads as well
+* code-format: format the code, do this before you commit and send a PR please!
+* tests: runs test cases to ensure that all features are still working as they should
+* help: shows these build options
+
+[Unless you are on Mac OS X](https://developer.apple.com/library/archive/qa/qa1118/_index.html) you can also build statically linked versions of the 
+afl++ binaries by passing the STATIC=1 argument to make:
+
+```shell
+$ make all STATIC=1
+```
+
+Note that afl++ is faster and better the newer the compilers used.
+Hence gcc-9 and especially llvm-9 should be the compilers of choice.
+If your distribution does not have them, you can use the Dockerfile:
+
+```shell
+$ docker build -t aflplusplus
+```
+
+
 ## 1) Challenges of guided fuzzing
--------------------------------
 
 Fuzzing is one of the most powerful and proven strategies for identifying
 security issues in real-world software; it is responsible for the vast
@@ -120,7 +204,7 @@ superior to blind fuzzing or coverage-only tools.
 PLEASE NOTE: llvm_mode compilation with afl-clang-fast/afl-clang-fast++
 instead of afl-gcc/afl-g++ is much faster and has a few cool features.
 See llvm_mode/ - however few code does not compile with llvm.
-We support llvm versions 4.0 to 8.
+We support llvm versions 3.8.0 to 10.
 
 When source code is available, instrumentation can be injected by a companion
 tool that works as a drop-in replacement for gcc or clang in any standard build
@@ -142,14 +226,14 @@ For C++ programs, you'd would also want to set `CXX=/path/to/afl/afl-g++`.
 
 The clang wrappers (afl-clang and afl-clang++) can be used in the same way;
 clang users may also opt to leverage a higher-performance instrumentation mode,
-as described in [llvm_mode/README.llvm](llvm_mode/README.llvm).
-Clang/LLVM has a much better performance and works with LLVM version 4.0 to 8.
+as described in [llvm_mode/README.md](llvm_mode/README.md).
+Clang/LLVM has a much better performance and works with LLVM version 3.8.0 to 10.
 
 Using the LAF Intel performance enhancements are also recommended, see 
-[llvm_mode/README.laf-intel](llvm_mode/README.laf-intel)
+[llvm_mode/README.laf-intel.md](llvm_mode/README.laf-intel.md)
 
 Using partial instrumentation is also recommended, see
-[llvm_mode/README.whitelist](llvm_mode/README.whitelist)
+[llvm_mode/README.whitelist.md](llvm_mode/README.whitelist.md)
 
 When testing libraries, you need to find or write a simple program that reads
 data from stdin or from a file and passes it to the tested library. In such a
@@ -165,14 +249,13 @@ $ CC=/path/to/afl/afl-gcc ./configure --disable-shared
 Setting `AFL_HARDEN=1` when calling 'make' will cause the CC wrapper to
 automatically enable code hardening options that make it easier to detect
 simple memory bugs. Libdislocator, a helper library included with AFL (see
-[libdislocator/README.dislocator](libdislocator/README.dislocator)) can help uncover heap corruption issues, too.
+[libdislocator/README.md](libdislocator/README.md)) can help uncover heap corruption issues, too.
 
 PS. ASAN users are advised to review [docs/notes_for_asan.txt](docs/notes_for_asan.txt)
 file for important caveats.
 
 
 ## 4) Instrumenting binary-only apps
----------------------------------
 
 When source code is *NOT* available, the fuzzer offers experimental support for
 fast, on-the-fly instrumentation of black-box binaries. This is accomplished
@@ -186,7 +269,7 @@ $ cd qemu_mode
 $ ./build_qemu_support.sh
 ```
 
-For additional instructions and caveats, see [qemu_mode/README.qemu](qemu_mode/README.qemu).
+For additional instructions and caveats, see [qemu_mode/README.md](qemu_mode/README.md).
 
 The mode is approximately 2-5x slower than compile-time instrumentation, is
 less conductive to parallelization, and may have some other quirks.
@@ -200,11 +283,10 @@ A more comprehensive description of these and other options can be found in
 
 
 ## 5) Power schedules
-------------------
 
 The power schedules were copied from Marcel Böhme's excellent AFLfast
-implementation and expands on the ability to discover new paths and
-therefore the coverage.
+implementation and expand on the ability to discover new paths and
+therefore may increase the code coverage.
 
 The available schedules are:
  
@@ -226,13 +308,8 @@ explore mode.
 made the default mode).
 
 More details can be found in the paper published at the 23rd ACM Conference on
-Computer and Communications Security (CCS'16):
- 
- (https://www.sigsac.org/ccs/CCS2016/accepted-papers/)[https://www.sigsac.org/ccs/CCS2016/accepted-papers/]
-
-
+Computer and Communications Security [CCS'16](https://www.sigsac.org/ccs/CCS2016/accepted-papers/)
 ## 6) Choosing initial test cases
-------------------------------
 
 To operate correctly, the fuzzer requires one or more starting file that
 contains a good example of the input data normally expected by the targeted
@@ -254,7 +331,6 @@ exercise different code paths in the target binary.
 
 
 ## 7) Fuzzing binaries
--------------------
 
 The fuzzing process itself is carried out by the afl-fuzz utility. This program
 requires a read-only directory with initial test cases, a separate place to
@@ -293,7 +369,6 @@ fuzzers - add the -d option to the command line.
 
 
 ## 8) Interpreting output
-----------------------
 
 See the [docs/status_screen.txt](docs/status_screen.txt) file for information on
 how to interpret the displayed stats and monitor the health of the process. Be
@@ -355,7 +430,6 @@ see [http://lcamtuf.coredump.cx/afl/plot/](http://lcamtuf.coredump.cx/afl/plot/)
 
 
 ## 9) Parallelized fuzzing
------------------------
 
 Every instance of afl-fuzz takes up roughly one core. This means that on
 multi-core systems, parallelization is necessary to fully utilize the hardware.
@@ -368,7 +442,6 @@ last section of [docs/parallel_fuzzing.txt](docs/parallel_fuzzing.txt) for tips.
 
 
 ## 10) Fuzzer dictionaries
-----------------------
 
 By default, afl-fuzz mutation engine is optimized for compact data formats -
 say, images, multimedia, compressed data, regular expression syntax, or shell
@@ -383,7 +456,7 @@ magic headers, or other special tokens associated with the targeted data type
   [http://lcamtuf.blogspot.com/2015/01/afl-fuzz-making-up-grammar-with.html](http://lcamtuf.blogspot.com/2015/01/afl-fuzz-making-up-grammar-with.html)
 
 To use this feature, you first need to create a dictionary in one of the two
-formats discussed in [dictionaries/README.dictionaries](ictionaries/README.dictionaries);
+formats discussed in [dictionaries/README.md](dictionaries/README.md);
 and then point the fuzzer to it via the -x option in the command line.
 
 (Several common dictionaries are already provided in that subdirectory, too.)
@@ -401,11 +474,10 @@ parsers and grammars, but isn't nearly as good as the -x mode.
 
 If a dictionary is really hard to come by, another option is to let AFL run
 for a while, and then use the token capture library that comes as a companion
-utility with AFL. For that, see [libtokencap/README.tokencap](libtokencap/README.tokencap).
+utility with AFL. For that, see [libtokencap/README.md](libtokencap/README.tokencap.md).
 
 
 ## 11) Crash triage
-----------------
 
 The coverage-based grouping of crashes usually produces a small data set that
 can be quickly triaged manually or with a very simple GDB or Valgrind script.
@@ -454,7 +526,6 @@ near the end of [docs/technical_details.txt](docs/technical_details.txt).
 
 
 ## 12) Going beyond crashes
-------------------------
 
 Fuzzing is a wonderful and underutilized technique for discovering non-crashing
 design and implementation errors, too. Quite a few interesting bugs have been
@@ -479,7 +550,6 @@ shared with libfuzzer) or `#ifdef __AFL_COMPILER` (this one is just for AFL).
 
 
 ## 13) Common-sense risks
-----------------------
 
 Please keep in mind that, similarly to many other computationally-intensive
 tasks, fuzzing may put strain on your hardware and on the OS. In particular:
@@ -510,7 +580,6 @@ tasks, fuzzing may put strain on your hardware and on the OS. In particular:
 
 
 ## 14) Known limitations & areas for improvement
----------------------------------------------
 
 Here are some of the most important caveats for AFL:
 
@@ -552,10 +621,9 @@ Beyond this, see INSTALL for platform-specific tips.
 
 
 ## 15) Special thanks
-------------------
 
-Many of the improvements to the original afl wouldn't be possible without
-feedback, bug reports, or patches from:
+Many of the improvements to the original afl and afl++ wouldn't be possible
+without feedback, bug reports, or patches from:
 
 ```
   Jann Horn                             Hanno Boeck
@@ -572,7 +640,7 @@ feedback, bug reports, or patches from:
   Jonathan Gray                         Filipe Cabecinhas
   Nico Weber                            Jodie Cunningham
   Andrew Griffiths                      Parker Thompson
-  Jonathan Neuschfer                    Tyler Nighswander
+  Jonathan Neuschaefer                  Tyler Nighswander
   Ben Nagy                              Samir Aguiar
   Aidan Thornton                        Aleksandar Nikolich
   Sam Hakim                             Laszlo Szekeres
@@ -591,20 +659,21 @@ feedback, bug reports, or patches from:
   Austin Seipp                          Daniel Komaromy
   Daniel Binderman                      Jonathan Metzman
   Vegard Nossum                         Jan Kneschke
-  Kurt Roeckx                           Marcel Bohme
+  Kurt Roeckx                           Marcel Boehme
   Van-Thuan Pham                        Abhik Roychoudhury
   Joshua J. Drake                       Toby Hutton
   Rene Freingruber                      Sergey Davidoff
   Sami Liedes                           Craig Young
   Andrzej Jackowski                     Daniel Hodson
-  Nathan Voss				Dominik Maier
+  Nathan Voss                           Dominik Maier
+  Andrea Biondo                         Vincent Le Garrec
+  Khaled Yakdan                         Kuang-che Wu
 ```
 
 Thank you!
 
 
 ## 16) Contact
------------
 
 Questions? Concerns? Bug reports? The contributors can be reached via
 [https://github.com/vanhauser-thc/AFLplusplus](https://github.com/vanhauser-thc/AFLplusplus)

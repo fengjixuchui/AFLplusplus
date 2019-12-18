@@ -3,7 +3,7 @@
 # american fuzzy lop - Advanced Persistent Graphing
 # -------------------------------------------------
 #
-# Written and maintained by Michal Zalewski <lcamtuf@google.com>
+# Written by Michal Zalewski
 # Based on a design & prototype by Michael Rash.
 #
 # Copyright 2014, 2015 Google Inc. All rights reserved.
@@ -15,15 +15,15 @@
 #   http://www.apache.org/licenses/LICENSE-2.0
 #
 
-echo "progress plotting utility for afl-fuzz by <lcamtuf@google.com>"
+echo "progress plotting utility for afl-fuzz by Michal Zalewski"
 echo
 
 if [ ! "$#" = "2" ]; then
 
   cat 1>&2 <<_EOF_
-This program generates gnuplot images from afl-fuzz output data. Usage:
-
 $0 afl_state_dir graph_output_dir
+
+This program generates gnuplot images from afl-fuzz output data. Usage:
 
 The afl_state_dir parameter should point to an existing state directory for any
 active or stopped instance of afl-fuzz; while graph_output_dir should point to

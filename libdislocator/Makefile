@@ -2,7 +2,7 @@
 # american fuzzy lop - libdislocator
 # ----------------------------------
 #
-# Written by Michal Zalewski <lcamtuf@google.com>
+# Written by Michal Zalewski
 #
 # Copyright 2016 Google Inc. All rights reserved.
 #
@@ -18,21 +18,26 @@ HELPER_PATH  = $(PREFIX)/lib/afl
 
 VERSION     = $(shell grep '^\#define VERSION ' ../config.h | cut -d '"' -f2)
 
-CFLAGS      ?= -O3 -funroll-loops
+CFLAGS      ?= -O3 -funroll-loops -I ../include/
 CFLAGS      += -Wall -D_FORTIFY_SOURCE=2 -g -Wno-pointer-sign
+
+ifdef USEHUGEPAGE
+	CFLAGS += -DUSEHUGEPAGE
+endif
 
 all: libdislocator.so
 
+VPATH = ..
 libdislocator.so: libdislocator.so.c ../config.h
-	$(CC) $(CFLAGS) -shared -fPIC $< -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) -shared -fPIC $< -o ../$@ $(LDFLAGS)
 
 .NOTPARALLEL: clean
 
 clean:
 	rm -f *.o *.so *~ a.out core core.[1-9][0-9]*
-	rm -f libdislocator.so
+	rm -f ../libdislocator.so
 
 install: all
-	install -m 755 libdislocator.so $${DESTDIR}$(HELPER_PATH)
-	install -m 644 README.dislocator $${DESTDIR}$(HELPER_PATH)
+	install -m 755 ../libdislocator.so $${DESTDIR}$(HELPER_PATH)
+	install -m 644 README.dislocator.md $${DESTDIR}$(HELPER_PATH)
 
