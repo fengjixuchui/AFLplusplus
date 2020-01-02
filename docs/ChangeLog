@@ -14,7 +14,16 @@ sending a mail to <afl-users+subscribe@googlegroups.com>.
 
 
 --------------------------
-Version ++2.59d (develop):
+Version ++2.60d (develop):
+--------------------------
+
+  - afl-fuzz:
+     - now prints the real python version support compiled in
+  - added fix from Debian project to compile libdislocator and libtokencap
+
+
+--------------------------
+Version ++2.60c (release):
 --------------------------
 
   - fixed a critical bug in afl-tmin that was introduced during ++2.53d
@@ -23,7 +32,7 @@ Version ++2.59d (develop):
   - added preeny's desock_dup ld_preload library as
     ./experimental/socket_fuzzing for network fuzzing
   - added AFL_AS_FORCE_INSTRUMENT environment variable for afl-as - this is
-    for retrorewrite project
+    for the retrorewrite project
   - we now set QEMU_SET_ENV from AFL_PRELOAD when qemu_mode is used
 
 

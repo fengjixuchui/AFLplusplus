@@ -2,9 +2,9 @@
 
   ![Travis State](https://api.travis-ci.com/vanhauser-thc/AFLplusplus.svg?branch=master)
 
-  Release Version: 2.59c 
+  Release Version: 2.60c 
 
-  Github Version: 2.59d
+  Github Version: 2.60d
 
   includes all necessary/interesting changes from Google's afl 2.56b
 
@@ -71,9 +71,9 @@
 
   (1) only in LLVM >= 9.0 due to a bug in llvm in previous versions
 
-  (2) gcc create non-performant code, hence it is disabled in gcc_plugin
+  (2) gcc creates non-performant code, hence it is disabled in gcc_plugin
 
-  So all in all this is the best-of AFL that is currently out there :-)
+  So all in all this is the best-of afl that is currently out there :-)
 
   For new versions and additional information, check out:
   [https://github.com/vanhauser-thc/AFLplusplus](https://github.com/vanhauser-thc/AFLplusplus)
