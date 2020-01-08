@@ -1,5 +1,5 @@
 /*
-   american fuzzy lop - LLVM-mode wrapper for clang
+   american fuzzy lop++ - LLVM-mode wrapper for clang
    ------------------------------------------------
 
    Written by Laszlo Szekeres <lszekeres@google.com> and
@@ -8,6 +8,7 @@
    LLVM integration design comes from Laszlo Szekeres.
 
    Copyright 2015, 2016 Google Inc. All rights reserved.
+   Copyright 2019-2020 AFLplusplus Project. All rights reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -442,8 +443,9 @@ int main(int argc, char** argv) {
 
         "You can specify custom next-stage toolchain via AFL_CC and AFL_CXX. "
         "Setting\n"
-        "AFL_HARDEN enables hardening optimizations in the compiled code.\n\n",
-        BIN_PATH, BIN_PATH);
+        "AFL_HARDEN enables hardening optimizations in the compiled code.\n\n"
+        "afl-clang-fast was built for llvm %s with the llvm binary path of \"%s\".\n\n",
+        BIN_PATH, BIN_PATH, LLVM_VERSION, LLVM_BINDIR);
 
     exit(1);
 
