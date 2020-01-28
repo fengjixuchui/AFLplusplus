@@ -25,7 +25,9 @@ Version ++2.60d (develop):
      - show in the help output for which llvm version it was compiled for
      - now does not need to be recompiled between trace-pc and pass
        instrumentation. compile normally and set AFL_LLVM_USE_TRACE_PC :)
-  - added blacklisted function check in all modules of llvm_mode
+  - afl-cmin is now a sh script (invoking awk) instead of bash for portability
+    the original script is still present as afl-cmin.bash
+  - added blacklist and whitelisting function check in all modules of llvm_mode
   - added fix from Debian project to compile libdislocator and libtokencap
 
 
