@@ -1,5 +1,7 @@
 # american fuzzy lop plus plus (afl++)
 
+  <img align="right" src="https://raw.githubusercontent.com/andreafioraldi/AFLplusplus-website/master/static/logo_256x256.png" alt="AFL++ Logo">
+
   ![Travis State](https://api.travis-ci.com/vanhauser-thc/AFLplusplus.svg?branch=master)
 
   Release Version: 2.60c 
@@ -7,7 +9,6 @@
   Github Version: 2.60d
 
   includes all necessary/interesting changes from Google's afl 2.56b
-
 
   Originally developed by Michal "lcamtuf" Zalewski.
 
@@ -80,7 +81,7 @@
   To compare notes with other users or get notified about major new features,
   send a mail to <afl-users+subscribe@googlegroups.com>.
 
-  See [docs/QuickStartGuide.txt](docs/QuickStartGuide.txt) if you don't have time to
+  See [docs/QuickStartGuide.md](docs/QuickStartGuide.md) if you don't have time to
   read this file.
 
 
@@ -250,7 +251,7 @@ automatically enable code hardening options that make it easier to detect
 simple memory bugs. Libdislocator, a helper library included with AFL (see
 [libdislocator/README.md](libdislocator/README.md)) can help uncover heap corruption issues, too.
 
-PS. ASAN users are advised to review [docs/notes_for_asan.txt](docs/notes_for_asan.txt)
+PS. ASAN users are advised to review [docs/notes_for_asan.md](docs/notes_for_asan.md)
 file for important caveats.
 
 
@@ -278,7 +279,7 @@ your binary, then you can use afl-fuzz normally and it will have twice
 the speed compared to qemu_mode.
 
 A more comprehensive description of these and other options can be found in
-[docs/binaryonly_fuzzing.txt](docs/binaryonly_fuzzing.txt)
+[docs/binaryonly_fuzzing.md](docs/binaryonly_fuzzing.md)
 
 
 ## 5) Power schedules
@@ -315,7 +316,7 @@ contains a good example of the input data normally expected by the targeted
 application. There are two basic rules:
 
   - Keep the files small. Under 1 kB is ideal, although not strictly necessary.
-    For a discussion of why size matters, see [perf_tips.txt](docs/perf_tips.txt).
+    For a discussion of why size matters, see [perf_tips.md](docs/perf_tips.md).
 
   - Use multiple test cases only if they are functionally different from
     each other. There is no point in using fifty different vacation photos
@@ -359,7 +360,7 @@ You can use -t and -m to override the default timeout and memory limit for the
 executed process; rare examples of targets that may need these settings touched
 include compilers and video decoders.
 
-Tips for optimizing fuzzing performance are discussed in [perf_tips.txt](docs/perf_tips.txt).
+Tips for optimizing fuzzing performance are discussed in [perf_tips.md](docs/perf_tips.md).
 
 Note that afl-fuzz starts by performing an array of deterministic fuzzing
 steps, which can take several days, but tend to produce neat test cases. If you
@@ -369,7 +370,7 @@ fuzzers - add the -d option to the command line.
 
 ## 8) Interpreting output
 
-See the [docs/status_screen.txt](docs/status_screen.txt) file for information on
+See the [docs/status_screen.md](docs/status_screen.md) file for information on
 how to interpret the displayed stats and monitor the health of the process. Be
 sure to consult this file especially if any UI elements are highlighted in red.
 
@@ -433,11 +434,11 @@ see [http://lcamtuf.coredump.cx/afl/plot/](http://lcamtuf.coredump.cx/afl/plot/)
 Every instance of afl-fuzz takes up roughly one core. This means that on
 multi-core systems, parallelization is necessary to fully utilize the hardware.
 For tips on how to fuzz a common target on multiple cores or multiple networked
-machines, please refer to [docs/parallel_fuzzing.txt](docs/parallel_fuzzing.txt).
+machines, please refer to [docs/parallel_fuzzing.md](docs/parallel_fuzzing.md).
 
 The parallel fuzzing mode also offers a simple way for interfacing AFL to other
 fuzzers, to symbolic or concolic execution engines, and so forth; again, see the
-last section of [docs/parallel_fuzzing.txt](docs/parallel_fuzzing.txt) for tips.
+last section of [docs/parallel_fuzzing.md](docs/parallel_fuzzing.md) for tips.
 
 
 ## 10) Fuzzer dictionaries
@@ -521,7 +522,7 @@ file, attempts to sequentially flip bytes, and observes the behavior of the
 tested program. It then color-codes the input based on which sections appear to
 be critical, and which are not; while not bulletproof, it can often offer quick
 insights into complex file formats. More info about its operation can be found
-near the end of [docs/technical_details.txt](docs/technical_details.txt).
+near the end of [docs/technical_details.md](docs/technical_details.md).
 
 
 ## 12) Going beyond crashes
@@ -593,12 +594,12 @@ Here are some of the most important caveats for AFL:
     wholly wrap the actual data format to be tested.
 
     To work around this, you can comment out the relevant checks (see
-    experimental/libpng_no_checksum/ for inspiration); if this is not possible,
+    examples/libpng_no_checksum/ for inspiration); if this is not possible,
     you can also write a postprocessor, as explained in
-    experimental/post_library/ (with AFL_POST_LIBRARY)
+    examples/post_library/ (with AFL_POST_LIBRARY)
 
   - There are some unfortunate trade-offs with ASAN and 64-bit binaries. This
-    isn't due to any specific fault of afl-fuzz; see [docs/notes_for_asan.txt](docs/notes_for_asan.txt)
+    isn't due to any specific fault of afl-fuzz; see [docs/notes_for_asan.md](docs/notes_for_asan.md)
     for tips.
 
   - There is no direct support for fuzzing network services, background
@@ -667,6 +668,7 @@ without feedback, bug reports, or patches from:
   Nathan Voss                           Dominik Maier
   Andrea Biondo                         Vincent Le Garrec
   Khaled Yakdan                         Kuang-che Wu
+  Josephine Calliotte
 ```
 
 Thank you!

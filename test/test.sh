@@ -149,12 +149,22 @@ test "$SYS" = "i686" -o "$SYS" = "x86_64" -o "$SYS" = "amd64" && {
       CODE=1
     }
     echo 000000000000000000000000 > in/in2
+    echo 111 > in/in3
     mkdir -p in2
-    ../afl-cmin -i in -o in2 -- ./test-instr.plain > /dev/null
-    CNT=`ls in2/ | wc -l`
+    ../afl-cmin -i in -o in2 -- ./test-instr.plain >/dev/null 2>&1 # why is afl-forkserver writing to stderr?
+    CNT=`ls in2/* 2>/dev/null | wc -l`
     case "$CNT" in
-      *1) $ECHO "$GREEN[+] afl-cmin correctly minimized the number of testcases" ;;
-      *)  $ECHO "$RED[!] afl-cmin did not correctly minimize the number of testcases"
+      *2) $ECHO "$GREEN[+] afl-cmin correctly minimized the number of testcases" ;;
+      *)  $ECHO "$RED[!] afl-cmin did not correctly minimize the number of testcases ($CNT)"
+          CODE=1
+          ;;
+    esac
+    rm -f in2/in*
+    AFL_PATH=`pwd`/.. ../afl-cmin.bash -i in -o in2 -- ./test-instr.plain >/dev/null
+    CNT=`ls in2/* 2>/dev/null | wc -l`
+    case "$CNT" in
+      *2) $ECHO "$GREEN[+] afl-cmin.bash correctly minimized the number of testcases" ;;
+      *)  $ECHO "$RED[!] afl-cmin.bash did not correctly minimize the number of testcases ($CNT)"
           CODE=1
           ;;
     esac
@@ -256,7 +266,7 @@ test -e ../afl-clang-fast -a -e ../split-switches-pass.so && {
     test "$SYS" = "i686" -o "$SYS" = "x86_64" -o "$SYS" = "amd64" || {
       echo 000000000000000000000000 > in/in2
       mkdir -p in2
-      ../afl-cmin -i in -o in2 -- ./test-instr.plain > /dev/null
+      ../afl-cmin -i in -o in2 -- ./test-instr.plain >/dev/null
       CNT=`ls in2/ | wc -l`
       case "$CNT" in
         *1) $ECHO "$GREEN[+] afl-cmin correctly minimized the number of testcases" ;;
@@ -318,7 +328,7 @@ test -e ../afl-clang-fast -a -e ../split-switches-pass.so && {
     CODE=1
   }
   rm -f test-compcov test.out whitelist.txt
-  ../afl-clang-fast -o test-persistent ../experimental/persistent_demo/persistent_demo.c > /dev/null 2>&1
+  ../afl-clang-fast -o test-persistent ../examples/persistent_demo/persistent_demo.c > /dev/null 2>&1
   test -e test-persistent && {
     echo foo | ../afl-showmap -o /dev/null -q -r ./test-persistent && {
       $ECHO "$GREEN[+] llvm_mode persistent mode feature works correctly"
@@ -427,7 +437,7 @@ test -e ../afl-gcc-fast -a -e ../afl-gcc-rt.o && {
     CODE=1
   }
   rm -f test-compcov test.out whitelist.txt
-  ../afl-gcc-fast -o test-persistent ../experimental/persistent_demo/persistent_demo.c > /dev/null 2>&1
+  ../afl-gcc-fast -o test-persistent ../examples/persistent_demo/persistent_demo.c > /dev/null 2>&1
   test -e test-persistent && {
     echo foo | ../afl-showmap -o /dev/null -q -r ./test-persistent && {
       $ECHO "$GREEN[+] gcc_plugin persistent mode feature works correctly"

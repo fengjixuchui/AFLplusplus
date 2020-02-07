@@ -1,12 +1,9 @@
-==================================
-Notes for using ASAN with afl-fuzz
-==================================
+# Notes for using ASAN with afl-fuzz
 
   This file discusses some of the caveats for fuzzing under ASAN, and suggests
   a handful of alternatives. See README for the general instruction manual.
 
-1) Short version
-----------------
+## 1) Short version
 
 ASAN on 64-bit systems requests a lot of memory in a way that can't be easily
 distinguished from a misbehaving program bent on crashing your system.
@@ -23,7 +20,7 @@ Because of this, fuzzing with ASAN is recommended only in four scenarios:
     - Precisely gauge memory needs using http://jwilk.net/software/recidivm .
 
     - Limit the memory available to process using cgroups on Linux (see
-      experimental/asan_cgroups).
+      examples/asan_cgroups).
 
 To compile with ASAN, set AFL_USE_ASAN=1 before calling 'make clean all'. The
 afl-gcc / afl-clang wrappers will pick that up and add the appropriate flags.
@@ -37,8 +34,7 @@ and can give you somewhat comparable results. You can also try using
 libdislocator (see libdislocator/README.dislocator.md in the parent directory) as a
 lightweight and hassle-free (but less thorough) alternative.
 
-2) Long version
----------------
+## 2) Long version
 
 ASAN allocates a huge region of virtual address space for bookkeeping purposes.
 Most of this is never actually accessed, so the OS never has to allocate any
@@ -74,7 +70,7 @@ There are also cgroups, but they are Linux-specific, not universally available
 even on Linux systems, and they require root permissions to set up; I'm a bit
 hesitant to make afl-fuzz require root permissions just for that. That said,
 if you are on Linux and want to use cgroups, check out the contributed script
-that ships in experimental/asan_cgroups/.
+that ships in examples/asan_cgroups/.
 
 In settings where cgroups aren't available, we have no nice, portable way to
 avoid counting the ASAN allocation toward the limit. On 32-bit systems, or for
@@ -105,16 +101,19 @@ examine them with ASAN, Valgrind, or other heavy-duty tools in a more
 controlled setting; or compile the target program with -m32 (32-bit mode)
 if your system supports that.
 
-3) Interactions with the QEMU mode
-----------------------------------
+## 3) Interactions with the QEMU mode
 
 ASAN, MSAN, and other sanitizers appear to be incompatible with QEMU user
 emulation, so please do not try to use them with the -Q option; QEMU doesn't
 seem to appreciate the shadow VM trick used by these tools, and will likely
 just allocate all your physical memory, then crash.
 
-4) ASAN and OOM crashes
------------------------
+You can, however, use QASan to run binaries that are not instrumented with ASan
+under QEMU with the AFL++ instrumentation.
+
+https://github.com/andreafioraldi/qasan
+
+## 4) ASAN and OOM crashes
 
 By default, ASAN treats memory allocation failures as fatal errors, immediately
 causing the program to crash. Since this is a departure from normal POSIX
@@ -129,15 +128,18 @@ want to cc: yourself on this bug:
 
   https://bugs.llvm.org/show_bug.cgi?id=22026
 
-5) What about UBSAN?
---------------------
+## 5) What about UBSAN?
 
-Some folks expressed interest in fuzzing with UBSAN. This isn't officially
-supported, because many installations of UBSAN don't offer a consistent way
-to abort() on fault conditions or to terminate with a distinctive exit code.
+New versions of UndefinedBehaviorSanitizer offers the
+-fsanitize=undefined-trap-on-error compiler flag that tells UBSan to insert an
+istruction that will cause SIGILL (ud2 on x86) when an undefined behaviour
+is detected. This is the option that you want to use when combining AFL++
+and UBSan.
 
-That said, some versions of the library can be binary-patched to address this
-issue, while newer releases support explicit compile-time flags - see this
-mailing list thread for tips:
+AFL_USE_UBSAN=1 env var will add this compiler flag to afl-clang-fast for you.
 
-  https://groups.google.com/forum/#!topic/afl-users/GyeSBJt4M38
+Old versions of UBSAN don't offer a consistent way
+to abort() on fault conditions or to terminate with a distinctive exit code
+but there are some versions of the library can be binary-patched to address this
+issue. You can also preload a shared library that substitute all the UBSan
+routines used to report errors with abort().

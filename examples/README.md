@@ -1,4 +1,10 @@
+# AFL++ Examples
+
 Here's a quick overview of the stuff you can find in this directory:
+
+  - custom_mutstors      - An example custom mutator
+  
+  - python_mutators      - Python mutators examples
 
   - argv_fuzzing         - a simple wrapper to allow cmdline to be fuzzed
                            (e.g., to test setuid programs).
@@ -20,7 +26,7 @@ Here's a quick overview of the stuff you can find in this directory:
                            with additional gdb metadata.
 
   - distributed_fuzzing  - a sample script for synchronizing fuzzer instances
-                           across multiple machines (see parallel_fuzzing.txt).
+                           across multiple machines (see parallel_fuzzing.md).
 
   - libpng_no_checksum   - a sample patch for removing CRC checks in libpng.
 
@@ -32,7 +38,7 @@ Here's a quick overview of the stuff you can find in this directory:
   - socket_fuzzing       - a LD_PRELOAD library 'redirects' a socket to stdin
                            for fuzzing access with afl++
 
-Note that the minimize_corpus.sh tool has graduated from the experimental/
+Note that the minimize_corpus.sh tool has graduated from the examples/
 directory and is now available as ../afl-cmin. The LLVM mode has likewise
 graduated to ../llvm_mode/*.
 

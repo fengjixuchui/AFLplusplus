@@ -334,9 +334,9 @@ void show_stats(void) {
 
   /* Lord, forgive me this. */
 
-  SAYF(SET_G1 bSTG bLT bH bSTOP cCYA
+  SAYF(SET_G1 bSTG bLT bH bSTOP                         cCYA
        " process timing " bSTG bH30 bH5 bH bHB bH bSTOP cCYA
-       " overall results " bSTG bH2 bH2 bRT "\n");
+       " overall results " bSTG bH2 bH2                 bRT "\n");
 
   if (dumb_mode) {
 
@@ -413,9 +413,9 @@ void show_stats(void) {
                 "   uniq hangs : " cRST "%-6s" bSTG         bV "\n",
        DTD(cur_ms, last_hang_time), tmp);
 
-  SAYF(bVR bH bSTOP            cCYA
+  SAYF(bVR bH bSTOP                                          cCYA
        " cycle progress " bSTG bH10 bH5 bH2 bH2 bHB bH bSTOP cCYA
-       " map coverage " bSTG bH bHT bH20 bH2 bVL "\n");
+       " map coverage " bSTG bH bHT bH20 bH2                 bVL "\n");
 
   /* This gets funny because we want to print several variable-length variables
      together, but then cram them into a fixed-width field - so we need to
@@ -443,9 +443,9 @@ void show_stats(void) {
 
   SAYF(bSTOP " count coverage : " cRST "%-21s" bSTG bV "\n", tmp);
 
-  SAYF(bVR bH bSTOP            cCYA
+  SAYF(bVR bH bSTOP                                         cCYA
        " stage progress " bSTG bH10 bH5 bH2 bH2 bX bH bSTOP cCYA
-       " findings in depth " bSTG bH10 bH5 bH2 bH2 bVL "\n");
+       " findings in depth " bSTG bH10 bH5 bH2 bH2          bVL "\n");
 
   sprintf(tmp, "%s (%0.02f%%)", DI(queued_favored),
           ((double)queued_favored) * 100 / queued_paths);
@@ -514,7 +514,7 @@ void show_stats(void) {
 
   /* Aaaalmost there... hold on! */
 
-  SAYF(bVR bH cCYA                      bSTOP
+  SAYF(bVR bH cCYA                                                     bSTOP
        " fuzzing strategy yields " bSTG bH10 bHT bH10 bH5 bHB bH bSTOP cCYA
        " path geometry " bSTG bH5 bH2 bVL "\n");
 
@@ -747,7 +747,7 @@ void show_init_stats(void) {
   SAYF("\n");
 
   if (avg_us > ((qemu_mode || unicorn_mode) ? 50000 : 10000))
-    WARNF(cLRD "The target binary is pretty slow! See %s/perf_tips.txt.",
+    WARNF(cLRD "The target binary is pretty slow! See %s/perf_tips.md.",
           doc_path);
 
   /* Let's keep things moving with slow binaries. */
@@ -762,11 +762,11 @@ void show_init_stats(void) {
   if (!resuming_fuzz) {
 
     if (max_len > 50 * 1024)
-      WARNF(cLRD "Some test cases are huge (%s) - see %s/perf_tips.txt!",
+      WARNF(cLRD "Some test cases are huge (%s) - see %s/perf_tips.md!",
             DMS(max_len), doc_path);
     else if (max_len > 10 * 1024)
-      WARNF("Some test cases are big (%s) - see %s/perf_tips.txt.",
-            DMS(max_len), doc_path);
+      WARNF("Some test cases are big (%s) - see %s/perf_tips.md.", DMS(max_len),
+            doc_path);
 
     if (useless_at_start && !in_bitmap)
       WARNF(cLRD "Some test cases look useless. Consider using a smaller set.");

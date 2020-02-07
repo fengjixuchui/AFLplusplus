@@ -96,7 +96,7 @@ static void usage(u8* argv0) {
       "score.\n"
       "                  <explore (default), fast, coe, lin, quad, or "
       "exploit>\n"
-      "                  see docs/power_schedules.txt\n"
+      "                  see docs/power_schedules.md\n"
       "  -f file       - location read by the fuzzed program (stdin)\n"
       "  -t msec       - timeout for each run (auto-scaled, 50-%d ms)\n"
       "  -m megs       - memory limit for child process (%d MB)\n"
@@ -133,7 +133,7 @@ static void usage(u8* argv0) {
 
       "Other stuff:\n"
       "  -T text       - text banner to show on the screen\n"
-      "  -M / -S id    - distributed mode (see parallel_fuzzing.txt)\n"
+      "  -M / -S id    - distributed mode (see parallel_fuzzing.md)\n"
       "  -I command    - execute this command/script when a new crash is "
       "found\n"
       "  -B bitmap.txt - mutate a specific test case, use the out/fuzz_bitmap "
@@ -145,7 +145,7 @@ static void usage(u8* argv0) {
       argv0, EXEC_TIMEOUT, MEM_LIMIT);
 
 #ifdef USE_PYTHON
-  SAYF("Compiled with Python %s module support, see docs/python_mutators.txt\n",
+  SAYF("Compiled with %s module support, see docs/python_mutators.md\n",
        (char*)PYTHON_VERSION);
 #endif
 

@@ -601,7 +601,7 @@ void perform_dry_run(char** argv) {
                "quickly\n"
                "      estimate the required amount of virtual memory for the "
                "binary. Also,\n"
-               "      if you are using ASAN, see %s/notes_for_asan.txt.\n\n"
+               "      if you are using ASAN, see %s/notes_for_asan.md.\n\n"
 
                MSG_FORK_ON_APPLE
 
@@ -1719,7 +1719,7 @@ void get_core_count(void) {
 
       } else if (cur_runnable + 1 <= cpu_core_count) {
 
-        OKF("Try parallel jobs - see %s/parallel_fuzzing.txt.", doc_path);
+        OKF("Try parallel jobs - see %s/parallel_fuzzing.md.", doc_path);
 
       }
 
