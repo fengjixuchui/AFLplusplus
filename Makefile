@@ -57,7 +57,7 @@ ifneq "$(shell uname -m)" "x86_64"
 endif
 
 CFLAGS     ?= -O3 -funroll-loops $(CFLAGS_OPT)
-CFLAGS     += -Wall -g -Wno-pointer-sign -I include/ \
+override CFLAGS     += -Wall -g -Wno-pointer-sign -I include/ \
               -DAFL_PATH=\"$(HELPER_PATH)\" -DBIN_PATH=\"$(BIN_PATH)\" \
               -DDOC_PATH=\"$(DOC_PATH)\" -Wno-unused-function
 
@@ -423,7 +423,7 @@ endif
 
 	install -m 755 afl-as $${DESTDIR}$(HELPER_PATH)
 	ln -sf afl-as $${DESTDIR}$(HELPER_PATH)/as
-	install -m 644 docs/*.md docs/ChangeLog $${DESTDIR}$(DOC_PATH)
+	install -m 644 docs/*.md $${DESTDIR}$(DOC_PATH)
 	cp -r testcases/ $${DESTDIR}$(MISC_PATH)
 	cp -r dictionaries/ $${DESTDIR}$(MISC_PATH)
 
