@@ -21,6 +21,7 @@ sending a mail to <afl-users+subscribe@googlegroups.com>.
      - all Python 2+3 versions supported now
      - changed execs_per_sec in fuzzer_stats from "current" execs per second
        (which is pointless) to total execs per second
+     - bugfix for dictionary insert stage count (fix via Google repo PR)
   - afl-clang-fast:
      - show in the help output for which llvm version it was compiled for
      - now does not need to be recompiled between trace-pc and pass
@@ -34,6 +35,7 @@ sending a mail to <afl-users+subscribe@googlegroups.com>.
      - AFL_PERSISTENT_HOOK callback module for persistent QEMU
        (see examples/qemu_persistent_hook)
      - added qemu_mode/README.persistent.md documentation
+     - AFL_ENTRYPOINT noew has instruction granularity
   - afl-cmin is now a sh script (invoking awk) instead of bash for portability
     the original script is still present as afl-cmin.bash
   - afl-showmap: -i dir option now allows processing multiple inputs using the
