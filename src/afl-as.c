@@ -518,7 +518,7 @@ int main(int argc, char** argv) {
 
     be_quiet = 1;
 
-  if (argc < 2) {
+  if (argc < 2 || (argc == 2 && strcmp(argv[1], "-h") == 0)) {
 
     SAYF(
         "\n"
@@ -532,7 +532,20 @@ int main(int argc, char** argv) {
         "advisable to\n"
         "set AFL_INST_RATIO to a value less than 100 in order to reduce the "
         "odds of\n"
-        "instrumenting every discovered branch.\n\n");
+        "instrumenting every discovered branch.\n\n"
+        "Environment variables used:\n"
+        "AFL_AS: path to assembler to use for instrumented files\n"
+        "AFL_CC: fall back path to assembler\n"
+        "AFL_CXX: fall back path to assembler\n"
+        "TMPDIR: directory to use for temporary files\n"
+        "TEMP: fall back path to directory for temporary files\n"
+        "TMP: fall back path to directory for temporary files\n"
+        "AFL_INST_RATIO: user specified instrumentation ratio\n"
+        "AFL_QUIET: suppress verbose output\n"
+        "AFL_KEEP_ASSEMBLY: leave instrumented assembly files\n"
+        "AFL_AS_FORCE_INSTRUMENT: force instrumentation\n"
+        "AFL_HARDEN, AFL_USE_ASAN, AFL_USE_MSAN, ALF_USE_UBSAN:\n"
+        "  used in the instrumentation summary message\n");
 
     exit(1);
 

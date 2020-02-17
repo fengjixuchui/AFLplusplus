@@ -12,6 +12,9 @@ sending a mail to <afl-users+subscribe@googlegroups.com>.
 ### Version ++2.60d (develop):
 
   - use -march=native if available
+  - most tools now check for mistyped environment variables
+  - the memory safety checks are now disabled for a little more speed during
+    fuzzing (only affects creating queue entries), can be toggled in config.h
   - afl-fuzz:
      - now prints the real python version support compiled in
      - set stronger performance compile options and little tweaks
@@ -22,6 +25,8 @@ sending a mail to <afl-users+subscribe@googlegroups.com>.
      - changed execs_per_sec in fuzzer_stats from "current" execs per second
        (which is pointless) to total execs per second
      - bugfix for dictionary insert stage count (fix via Google repo PR)
+     - added warning if -M is used together with custom mutators with _ONLY option
+  - llvm_mode InsTrim: no pointless instrumentation of 1 block functions
   - afl-clang-fast:
      - show in the help output for which llvm version it was compiled for
      - now does not need to be recompiled between trace-pc and pass
