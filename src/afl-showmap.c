@@ -80,7 +80,7 @@ u8 *out_file,                          /* Trace output file                 */
     *stdin_file,                       /* stdin file                        */
     *in_dir,                           /* input folder                      */
     *doc_path,                         /* Path to docs                      */
-    *at_file;                          /* Substitution string for @@        */
+    *at_file = NULL;                          /* Substitution string for @@        */
 
 static u8* in_data;                    /* Input data                        */
 
@@ -901,11 +901,13 @@ int main(int argc, char** argv, char** envp) {
   if (in_dir) {
 
     if (at_file) PFATAL("Options -A and -i are mutually exclusive");
-    at_file = "@@";
+    detect_file_args(argv + optind, "");
+
+  } else {
+
+    detect_file_args(argv + optind, at_file);
 
   }
-
-  detect_file_args(argv + optind, "");
 
   for (i = optind; i < argc; i++)
     if (strcmp(argv[i], "@@") == 0) arg_offset = i;
@@ -1014,12 +1016,12 @@ int main(int argc, char** argv, char** envp) {
         tcnt, highest, total, out_file);
 
   }
-  
+
   if (stdin_file) {
-  
+
     unlink(stdin_file);
     stdin_file = NULL;
-    
+
   }
 
   exit(child_crashed * 2 + child_timed_out);

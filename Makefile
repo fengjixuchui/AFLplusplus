@@ -64,7 +64,7 @@ endif
 CFLAGS     ?= -O3 -funroll-loops $(CFLAGS_OPT)
 override CFLAGS     += -Wall -g -Wno-pointer-sign -I include/ \
               -DAFL_PATH=\"$(HELPER_PATH)\" -DBIN_PATH=\"$(BIN_PATH)\" \
-              -DDOC_PATH=\"$(DOC_PATH)\" -Wno-unused-function
+              -DDOC_PATH=\"$(DOC_PATH)\" -Wno-unused-function -fcommon
 
 AFL_FUZZ_FILES = $(wildcard src/afl-fuzz*.c)
 
@@ -200,7 +200,14 @@ help:
 	@echo "help: shows these build options :-)"
 	@echo "=========================================="
 	@echo "Recommended: \"distrib\" or \"source-only\", then \"install\""
-
+	@echo
+	@echo Known build environment options:
+	@echo "=========================================="
+	@echo STATIC - compile AFL++ static
+	@echo ASAN_BUILD - compiles with memory sanitizer for debug purposes
+	@echo AFL_NO_X86 - if compiling on non-intel/amd platforms
+	@echo "=========================================="
+	@echo e.g.: make ASAN_BUILD=1
 
 ifndef AFL_NO_X86
 
@@ -321,7 +328,7 @@ ifndef AFL_NO_X86
 
 test_build: afl-gcc afl-as afl-showmap
 	@echo "[*] Testing the CC wrapper and instrumentation output..."
-	@unset AFL_USE_ASAN AFL_USE_MSAN AFL_CC; AFL_INST_RATIO=100 AFL_PATH=. ./$(TEST_CC) $(CFLAGS) test-instr.c -o test-instr $(LDFLAGS) 2>&1 | grep 'afl-as' >/dev/null || (echo "Oops, afl-as did not get called from "$(TEST_CC)". This is normally achieved by "$(CC)" honoring the -B option."; exit 1 )
+	@unset AFL_USE_ASAN AFL_USE_MSAN AFL_CC; AFL_DEBUG=1 AFL_INST_RATIO=100 AFL_PATH=. ./$(TEST_CC) $(CFLAGS) test-instr.c -o test-instr $(LDFLAGS) 2>&1 | grep 'afl-as' >/dev/null || (echo "Oops, afl-as did not get called from "$(TEST_CC)". This is normally achieved by "$(CC)" honoring the -B option."; exit 1 )
 	./afl-showmap -m none -q -o .test-instr0 ./test-instr < /dev/null
 	echo 1 | ./afl-showmap -m none -q -o .test-instr1 ./test-instr
 	@rm -f test-instr

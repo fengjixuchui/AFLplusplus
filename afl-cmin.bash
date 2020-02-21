@@ -128,6 +128,11 @@ Minimization settings:
 
 For additional tips, please consult docs/README.
 
+Environment variables used:
+AFL_KEEP_TRACES: leave the temporary <out_dir>\.traces directory
+AFL_PATH: path for the afl-showmap binary
+AFL_SKIP_BIN_CHECK: skip check for target binary
+AFL_ALLOW_TMP: allow unsafe use of input/output directories under {/var}/tmp
 _EOF_
   exit 1
 fi
@@ -435,7 +440,7 @@ touch "$TRACE_DIR/.already_have"
 while read -r cnt tuple; do
 
   CUR=$((CUR+1))
-  printf "\\r    Processing tuple $CUR/$TUPLE_COUNT... "
+  printf "\\r    Processing tuple $CUR/$TUPLE_COUNT with count $cnt... "
 
   # If we already have this tuple, skip it.
 
@@ -443,6 +448,7 @@ while read -r cnt tuple; do
 
   FN=${BEST_FILE[tuple]}
 
+#  echo "tuple nr $CUR ($tuple cnt=$cnt) -> $FN" >> "$TRACE_DIR/.log"
   $CP_TOOL "$IN_DIR/$FN" "$OUT_DIR/$FN"
 
   if [ "$((CUR % 5))" = "0" ]; then
