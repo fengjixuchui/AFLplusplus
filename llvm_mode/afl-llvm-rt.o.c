@@ -130,6 +130,48 @@ static void __afl_map_shm(void) {
 
   }
 
+  id_str = getenv(CMPLOG_SHM_ENV_VAR);
+
+  if (id_str) {
+
+#ifdef USEMMAP
+    const char*    shm_file_path = id_str;
+    int            shm_fd = -1;
+    unsigned char* shm_base = NULL;
+
+    /* create the shared memory segment as if it was a file */
+    shm_fd = shm_open(shm_file_path, O_RDWR, 0600);
+    if (shm_fd == -1) {
+
+      printf("shm_open() failed\n");
+      exit(1);
+
+    }
+
+    /* map the shared memory segment to the address space of the process */
+    shm_base = mmap(0, sizeof(struct cmp_map), PROT_READ | PROT_WRITE,
+                    MAP_SHARED, shm_fd, 0);
+    if (shm_base == MAP_FAILED) {
+
+      close(shm_fd);
+      shm_fd = -1;
+
+      printf("mmap() failed\n");
+      exit(2);
+
+    }
+
+    __afl_cmp_map = shm_base;
+#else
+    u32 shm_id = atoi(id_str);
+
+    __afl_cmp_map = shmat(shm_id, NULL, 0);
+#endif
+
+    if (__afl_cmp_map == (void*)-1) _exit(1);
+
+  }
+
 }
 
 /* Fork server logic. */
@@ -370,7 +412,7 @@ void __sanitizer_cov_trace_cmp2(uint16_t Arg1, uint16_t Arg2) {
   uintptr_t k = (uintptr_t)__builtin_return_address(0);
   k = (k >> 4) ^ (k << 8);
   k &= CMP_MAP_W - 1;
-  
+
   __afl_cmp_map->headers[k].type = CMP_TYPE_INS;
 
   u32 hits = __afl_cmp_map->headers[k].hits;
@@ -394,7 +436,7 @@ void __sanitizer_cov_trace_cmp4(uint32_t Arg1, uint32_t Arg2) {
   uintptr_t k = (uintptr_t)__builtin_return_address(0);
   k = (k >> 4) ^ (k << 8);
   k &= CMP_MAP_W - 1;
-  
+
   __afl_cmp_map->headers[k].type = CMP_TYPE_INS;
 
   u32 hits = __afl_cmp_map->headers[k].hits;
@@ -415,7 +457,7 @@ void __sanitizer_cov_trace_cmp8(uint64_t Arg1, uint64_t Arg2) {
   uintptr_t k = (uintptr_t)__builtin_return_address(0);
   k = (k >> 4) ^ (k << 8);
   k &= CMP_MAP_W - 1;
-  
+
   __afl_cmp_map->headers[k].type = CMP_TYPE_INS;
 
   u32 hits = __afl_cmp_map->headers[k].hits;
@@ -473,21 +515,19 @@ void __sanitizer_cov_trace_switch(uint64_t Val, uint64_t* Cases) {
 // to avoid to call it on .text addresses
 static int area_is_mapped(void* ptr, size_t len) {
 
-  char * p = ptr;
-  char * page = (char*)((uintptr_t)p & ~(sysconf(_SC_PAGE_SIZE) -1));
+  char* p = ptr;
+  char* page = (char*)((uintptr_t)p & ~(sysconf(_SC_PAGE_SIZE) - 1));
 
   int r = msync(page, (p - page) + len, MS_ASYNC);
-  if (r < 0)
-    return errno != ENOMEM;
+  if (r < 0) return errno != ENOMEM;
   return 1;
 
 }
 
 void __cmplog_rtn_hook(void* ptr1, void* ptr2) {
 
-  if (!area_is_mapped(ptr1, 32) || !area_is_mapped(ptr2, 32))
-    return;
-  
+  if (!area_is_mapped(ptr1, 32) || !area_is_mapped(ptr2, 32)) return;
+
   uintptr_t k = (uintptr_t)__builtin_return_address(0);
   k = (k >> 4) ^ (k << 8);
   k &= CMP_MAP_W - 1;
@@ -500,7 +540,10 @@ void __cmplog_rtn_hook(void* ptr1, void* ptr2) {
   __afl_cmp_map->headers[k].shape = 31;
 
   hits &= CMP_MAP_RTN_H - 1;
-  __builtin_memcpy(((struct cmpfn_operands*)__afl_cmp_map->log[k])[hits].v0, ptr1, 32);
-  __builtin_memcpy(((struct cmpfn_operands*)__afl_cmp_map->log[k])[hits].v1, ptr2, 32);
+  __builtin_memcpy(((struct cmpfn_operands*)__afl_cmp_map->log[k])[hits].v0,
+                   ptr1, 32);
+  __builtin_memcpy(((struct cmpfn_operands*)__afl_cmp_map->log[k])[hits].v1,
+                   ptr2, 32);
 
 }
+
