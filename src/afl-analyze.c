@@ -780,11 +780,11 @@ static void usage(u8* argv0) {
   SAYF(
       "\n%s [ options ] -- /path/to/target_app [ ... ]\n\n"
 
-      "Required parameters:\n\n"
+      "Required parameters:\n"
 
-      "  -i file       - input test case to be analyzed by the tool\n"
+      "  -i file       - input test case to be analyzed by the tool\n\n"
 
-      "Execution control settings:\n\n"
+      "Execution control settings:\n"
 
       "  -f file       - input file read by the tested program (stdin)\n"
       "  -t msec       - timeout for each run (%d ms)\n"
@@ -794,13 +794,23 @@ static void usage(u8* argv0) {
       "  -W            - use qemu-based instrumentation with Wine (Wine "
       "mode)\n\n"
 
-      "Analysis settings:\n\n"
+      "Analysis settings:\n"
 
       "  -e            - look for edge coverage only, ignore hit counts\n\n"
 
-      "For additional tips, please consult %s/README.\n\n",
+      "For additional tips, please consult %s/README.md.\n\n"
 
-      argv0, EXEC_TIMEOUT, MEM_LIMIT, doc_path);
+      "Environment variables used:\n"
+      "TMPDIR: directory to use for temporary input files\n"
+      "ASAN_OPTIONS: custom settings for ASAN\n"
+      "              (must contain abort_on_error=1 and symbolize=0)\n"
+      "MSAN_OPTIONS: custom settings for MSAN\n"
+      "              (must contain exitcode="STRINGIFY(MSAN_ERROR)" and symbolize=0)\n"
+      "AFL_PRELOAD: LD_PRELOAD settings for target\n"
+      "AFL_ANALYZE_HEX: print file offsets in hexadecimal instead of decimal\n"
+      "AFL_SKIP_BIN_CHECK: skip checking the location of and the target\n"
+
+      , argv0, EXEC_TIMEOUT, MEM_LIMIT, doc_path);
 
   exit(1);
 
