@@ -112,7 +112,8 @@ static void usage(u8* argv0) {
       "entering the\n"
       "                  pacemaker mode (minutes of no new paths, 0 = "
       "immediately).\n"
-      "                  a recommended value is 10-60. see docs/README.MOpt.md\n"
+      "                  a recommended value is 10-60. see "
+      "docs/README.MOpt.md\n"
       "  -c program    - enable CmpLog by specifying a binary compiled for "
       "it.\n"
       "                  if using QEMU, just use -c 0.\n\n"
@@ -716,7 +717,7 @@ int main(int argc, char** argv, char** envp) {
 
   if (getenv("LD_PRELOAD"))
     WARNF(
-        "LD_PRELOAD is set, are you sure that is want to you want to do "
+        "LD_PRELOAD is set, are you sure that is what to you want to do "
         "instead of using AFL_PRELOAD?");
 
   if (getenv("AFL_PRELOAD")) {
@@ -738,9 +739,9 @@ int main(int argc, char** argv, char** envp) {
       }
 
       if (qemu_preload)
-        buf = alloc_printf("%s,LD_PRELOAD=%s", qemu_preload, afl_preload);
+        buf = alloc_printf("%s,LD_PRELOAD=%s,DYLD_INSERT_LIBRARIES=%s", qemu_preload, afl_preload, afl_preload);
       else
-        buf = alloc_printf("LD_PRELOAD=%s", afl_preload);
+        buf = alloc_printf("LD_PRELOAD=%s,DYLD_INSERT_LIBRARIES=%s", afl_preload, afl_preload);
 
       setenv("QEMU_SET_ENV", buf, 1);
 
