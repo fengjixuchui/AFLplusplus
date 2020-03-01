@@ -41,6 +41,7 @@ static u8*  obj_path;                  /* Path to runtime libraries         */
 static u8** cc_params;                 /* Parameters passed to the real CC  */
 static u32  cc_par_cnt = 1;            /* Param count, including argv0      */
 u8          use_stdin = 0;                                         /* dummy */
+u8          be_quiet;
 
 /* Try to find the runtime libraries. If that fails, abort. */
 
@@ -323,10 +324,24 @@ int main(int argc, char** argv, char** envp) {
         "programs\n"
         "(similarly to the LLVM plugin used by afl-clang-fast).\n\n"
 
-        "You can specify custom next-stage toolchain via AFL_CC and AFL_CXX. "
-        "Setting\n"
-        "AFL_HARDEN enables hardening optimizations in the compiled code.\n\n",
-        BIN_PATH, BIN_PATH);
+        "Environment variables used:\n"
+        "AFL_CC: path to the C compiler to use\n"
+        "AFL_CXX: path to the C++ compiler to use\n"
+        "AFL_PATH: path to instrumenting pass and runtime (afl-gcc-rt.*o)\n"
+        "AFL_DONT_OPTIMIZE: disable optimization instead of -O3\n"
+        "AFL_NO_BUILTIN: compile for use with libtokencap.so\n"
+        "AFL_INST_RATIO: percentage of branches to instrument\n"
+        "AFL_QUIET: suppress verbose output\n"
+        "AFL_DEBUG: enable developer debugging output\n"
+        "AFL_HARDEN: adds code hardening to catch memory bugs\n"
+        "AFL_USE_ASAN: activate address sanitizer\n"
+        "AFL_USE_MSAN: activate memory sanitizer\n"
+        "AFL_USE_UBSAN: activate undefined behaviour sanitizer\n"
+        "AFL_GCC_WHITELIST: enable whitelisting (selective instrumentation)\n"
+
+        "\nafl-gcc-fast was built for gcc %s with the gcc binary path of "
+        "\"%s\".\n\n",
+        BIN_PATH, BIN_PATH, GCC_VERSION, GCC_BINDIR);
 
     exit(1);
 

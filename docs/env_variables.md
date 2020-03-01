@@ -223,12 +223,13 @@ checks or alter some of the more exotic semantics of the tool:
     for more.
 
   - Setting AFL_CUSTOM_MUTATOR_LIBRARY to a shared library with
-    afl_custom_mutator() export run additional mutations though this library.
+    afl_custom_mutator() creates additional mutations through this library.
     If AFL_CUSTOM_MUTATOR_ONLY is also set, all mutations will solely be
-    performed with/from the libary. see [custom_mutator.md](custom_mutator.md)
+    performed with/from the library. See [custom_mutator.md](custom_mutator.md)
 
-  - For AFL_PYTHON_MODULE and AFL_PYTHON_ONLY - they require to be compiled
-    with -DUSE_PYTHON. Please see [python_mutators.md](python_mutators.md)
+  - For AFL_PYTHON_MODULE and AFL_PYTHON_ONLY - they require afl-fuzz to
+    be compiled with Python (which is autodetected during builing afl-fuzz).
+    Please see [python_mutators.md](python_mutators.md).
     This feature allows to configure custom mutators which can be very helpful
     in e.g. fuzzing XML or other highly flexible structured input.
 
@@ -261,6 +262,16 @@ checks or alter some of the more exotic semantics of the tool:
 
   - Setting AFL_DEBUG_CHILD_OUTPUT will not suppress the child output.
     Not pretty but good for debugging purposes.
+
+  - Setting AFL_NO_CPU_RED will not display very high cpu usages in red color.
+
+  - Setting AFL_AUTORESUME will resume a fuzz run (same as providing `-i -`)
+    for an existing out folder, even if a different `-i` was provided.
+    Without this setting, afl-fuzz will refuse execution for a long-fuzzed out dir.
+
+  - Outdated environment variables that are that not supported anymore:
+    AFL_DEFER_FORKSRV
+    AFL_PERSISTENT
 
 ## 4) Settings for afl-qemu-trace
 
@@ -408,3 +419,4 @@ optimal values if not already present in the environment:
     Be sure to include the first one when customizing anything, since some
     MSAN versions don't call abort() on error, and we need a way to detect
     faults.
+
