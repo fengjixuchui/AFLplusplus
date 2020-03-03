@@ -186,6 +186,7 @@ static void usage(u8* argv0, int more_help) {
       //"AFL_DEFER_FORKSRV: not supported anymore -> no effect, just a warning\n"
       "AFL_EXIT_WHEN_DONE: exit when all inputs are run and no new finds are found\n"
       "AFL_BENCH_UNTIL_CRASH: exit soon when the first crashing input has been found\n"
+      "AFL_AUTORESUME: resume fuzzing if directory specified by -o already exists\n"
       "\n"
     );
   else
@@ -314,14 +315,7 @@ int main(int argc, char** argv, char** envp) {
         if (in_dir) FATAL("Multiple -i options not supported");
         in_dir = optarg;
 
-        if (!strcmp(in_dir, "-")) {
-            
-            if (getenv("AFL_AUTORESUME")) 
-              WARNF("AFL_AUTORESUME has no effect for '-i -'");
-
-            in_place_resume = 1;
-
-        }
+        if (!strcmp(in_dir, "-")) in_place_resume = 1;
 
         break;
 
@@ -756,6 +750,14 @@ int main(int argc, char** argv, char** envp) {
   if (get_afl_env("AFL_NO_ARITH")) no_arith = 1;
   if (get_afl_env("AFL_SHUFFLE_QUEUE")) shuffle_queue = 1;
   if (get_afl_env("AFL_FAST_CAL")) fast_cal = 1;
+
+  if (get_afl_env("AFL_AUTORESUME")) {
+    
+    autoresume = 1;
+    if (in_place_resume) 
+      SAYF("AFL_AUTORESUME has no effect for '-i -'");
+
+  }
 
   if (get_afl_env("AFL_HANG_TMOUT")) {
 
