@@ -25,15 +25,42 @@
 
 #ifndef __AFLCOMMON_H
 #define __AFLCOMMON_H
+
+#include <sys/time.h>
 #include "types.h"
+#include "stdbool.h"
 
-extern u8* target_path;                 /* Path to target binary            */
-
-void detect_file_args(char** argv, u8* prog_in);
+void detect_file_args(char** argv, u8* prog_in, u8 use_stdin);
 void check_environment_vars(char** env);
 
-char** get_qemu_argv(u8* own_loc, char** argv, int argc);
-char** get_wine_argv(u8* own_loc, char** argv, int argc);
+char** get_qemu_argv(u8* own_loc, u8 **target_path_p, int argc, char **argv);
+char** get_wine_argv(u8* own_loc, u8 **target_path_p, int argc, char **argv);
 char*  get_afl_env(char* env);
-#endif
 
+/* Get unix time in milliseconds */
+
+static u64 get_cur_time(void) {
+
+  struct timeval  tv;
+  struct timezone tz;
+
+  gettimeofday(&tv, &tz);
+
+  return (tv.tv_sec * 1000ULL) + (tv.tv_usec / 1000);
+
+}
+
+/* Get unix time in microseconds */
+
+static u64 get_cur_time_us(void) {
+
+  struct timeval  tv;
+  struct timezone tz;
+
+  gettimeofday(&tv, &tz);
+
+  return (tv.tv_sec * 1000000ULL) + tv.tv_usec;
+
+}
+
+#endif

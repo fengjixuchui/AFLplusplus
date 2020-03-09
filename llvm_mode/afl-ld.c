@@ -44,6 +44,8 @@
 
 #include <dirent.h>
 
+#define MAX_PARAM_COUNT 4096
+
 static u8 **ld_params,              /* Parameters passed to the real 'ld'   */
     **link_params,                  /* Parameters passed to 'llvm-link'     */
     **opt_params,                   /* Parameters passed to 'opt' opt       */
@@ -59,6 +61,8 @@ static u8  cwd[4096];
 static u8* tmp_dir;
 static u8* ar_dir;
 static u8  ar_dir_cnt;
+static u8* libdirs[254];
+static u8  libdir_cnt;
 
 static u8 be_quiet,                 /* Quiet mode (no stderr output)        */
     debug,                          /* AFL_DEBUG                            */
@@ -143,15 +147,21 @@ int is_llvm_file(const char* file) {
   int fd;
   u8  buf[5];
 
-  if ((fd = open(file, O_RDONLY)) < 0) return 0;
+  if ((fd = open(file, O_RDONLY)) < 0) {
 
-  if (read(fd, buf, sizeof(buf)) != sizeof(buf)) return 0;
+    if (debug) SAYF(cMGN "[D] " cRST "File %s not found", file);
+    return 0;
+
+  }
+
+  if (read(fd, buf, 4) != 4) return 0;
   buf[sizeof(buf) - 1] = 0;
 
   close(fd);
 
   if (strncmp(buf, "; Mo", 4) == 0) return 1;
-  if (buf[0] == 'B' && buf[1] == 'C' && buf[2] == 0xC0 && buf[3] == 0xDE)
+
+  if (buf[0] == 'B' && buf[1] == 'C' && buf[2] == 0xc0 && buf[3] == 0xde)
     return 1;
 
   return 0;
@@ -183,7 +193,8 @@ int is_duplicate(u8** params, u32 ld_param_cnt, u8* ar_file) {
    so we exploit this property to keep the code "simple". */
 static void edit_params(int argc, char** argv) {
 
-  u32 i, have_lto = 0;
+  u32 i, have_lto = 0, libdir_index;
+  u8  libdir_file[4096];
 
   if (tmp_dir == NULL) {
 
@@ -201,13 +212,13 @@ static void edit_params(int argc, char** argv) {
   final_file =
       alloc_printf("%s/.afl-%u-%u-3.bc", tmp_dir, getpid(), (u32)time(NULL));
 
-  ld_params = ck_alloc((argc + 128) * sizeof(u8*));
-  link_params = ck_alloc((argc + 256) * sizeof(u8*));
+  ld_params = ck_alloc(4096 * sizeof(u8*));
+  link_params = ck_alloc(4096 * sizeof(u8*));
   inst_params = ck_alloc(12 * sizeof(u8*));
   opt_params = ck_alloc(12 * sizeof(u8*));
 
   ld_params[0] = (u8*)real_ld;
-  ld_params[argc] = 0;
+  ld_params[ld_param_cnt++] = "--allow-multiple-definition";
 
   link_params[0] = alloc_printf("%s/%s", LLVM_BINDIR, "llvm-link");
   link_params[link_param_cnt++] = "-S";  // we create the linked file as .ll
@@ -215,9 +226,13 @@ static void edit_params(int argc, char** argv) {
   link_params[link_param_cnt++] = linked_file;
 
   opt_params[0] = alloc_printf("%s/%s", LLVM_BINDIR, "opt");
-  if (getenv("AFL_DONT_OPTIMIZE") == NULL)
+  if (getenv("AFL_DONT_OPTIMIZE") == NULL) {
+
     opt_params[opt_param_cnt++] = "-O3";
-  else
+    opt_params[opt_param_cnt++] = "--polly";
+
+  } else
+
     opt_params[opt_param_cnt++] = "-O0";
   // opt_params[opt_param_cnt++] = "-S"; // only when debugging
   opt_params[opt_param_cnt++] = linked_file;  // input: .ll file
@@ -234,7 +249,18 @@ static void edit_params(int argc, char** argv) {
   inst_params[inst_param_cnt++] = "-o";
   inst_params[inst_param_cnt++] = final_file;  // output: .bc file
 
+  // first we must collect all library search paths
+  for (i = 1; i < argc; i++)
+    if (strlen(argv[i]) > 2 && argv[i][0] == '-' && argv[i][1] == 'L')
+      libdirs[libdir_cnt++] = argv[i] + 2;
+
+  // then we inspect all options to the target linker
   for (i = 1; i < argc; i++) {
+
+    if (ld_param_cnt >= MAX_PARAM_COUNT || link_param_cnt >= MAX_PARAM_COUNT)
+      FATAL(
+          "Too many command line parameters because of unpacking .a archives, "
+          "this would need to be done by hand ... sorry! :-(");
 
     if (strncmp(argv[i], "-flto", 5) == 0) have_lto = 1;
 
@@ -255,10 +281,48 @@ static void edit_params(int argc, char** argv) {
 
     }
 
+    // if a -l library is linked and no .so is found but an .a archive is there
+    // then the archive will be used. So we have to emulate this and check
+    // if an archive will be used and if yes we will instrument it too
+    libdir_file[0] = 0;
+    libdir_index = libdir_cnt;
+    if (strncmp(argv[i], "-l", 2) == 0 && libdir_cnt > 0 &&
+        strncmp(argv[i], "-lgcc", 5) != 0) {
+
+      u8 found = 0;
+
+      for (uint32_t j = 0; j < libdir_cnt && !found; j++) {
+
+        snprintf(libdir_file, sizeof(libdir_file), "%s/lib%s%s", libdirs[j],
+                 argv[i] + 2, ".so");
+        if (access(libdir_file, R_OK) != 0) {  // no .so found?
+
+          snprintf(libdir_file, sizeof(libdir_file), "%s/lib%s%s", libdirs[j],
+                   argv[i] + 2, ".a");
+          if (access(libdir_file, R_OK) == 0) {  // but .a found?
+
+            libdir_index = j;
+            found = 1;
+            if (debug) SAYF(cMGN "[D] " cRST "Found %s\n", libdir_file);
+
+          }
+
+        } else {
+
+          found = 1;
+          if (debug) SAYF(cMGN "[D] " cRST "Found %s\n", libdir_file);
+
+        }
+
+      }
+
+    }
+
     // is the parameter an .a AR archive? If so, unpack and check its files
-    if (argv[i][0] != '-' && strlen(argv[i]) > 2 &&
-        argv[i][strlen(argv[i]) - 1] == 'a' &&
-        argv[i][strlen(argv[i]) - 2] == '.') {
+    if (libdir_index < libdir_cnt ||
+        (argv[i][0] != '-' && strlen(argv[i]) > 2 &&
+         argv[i][strlen(argv[i]) - 1] == 'a' &&
+         argv[i][strlen(argv[i]) - 2] == '.')) {
 
       // This gets a bit odd. I encountered several .a files being linked and
       // where the same "foo.o" was in both .a archives. llvm-link does not
@@ -267,9 +331,12 @@ static void edit_params(int argc, char** argv) {
       u8             this_wd[4096], *this_ar;
       u8             ar_params_cnt = 4;
       u8*            ar_params[ar_params_cnt];
+      u8*            file = argv[i];
       s32            pid, status;
       DIR*           arx;
       struct dirent* dir_ent;
+
+      if (libdir_index < libdir_cnt) file = libdir_file;
 
       if (ar_dir_cnt == 0) {  // first archive, we setup up the basics
 
@@ -284,10 +351,10 @@ static void edit_params(int argc, char** argv) {
         FATAL("can not get the current working directory");
       if (chdir(ar_dir) != 0)
         FATAL("can not chdir to temporary directory %s", ar_dir);
-      if (argv[i][0] == '/')
-        this_ar = argv[i];
+      if (file[0] == '/')
+        this_ar = file;
       else
-        this_ar = alloc_printf("%s/%s", this_wd, argv[i]);
+        this_ar = alloc_printf("%s/%s", this_wd, file);
       ar_params[0] = alloc_printf("%s/%s", LLVM_BINDIR, "llvm-ar");
       ar_params[1] = "x";
       ar_params[2] = this_ar;
@@ -327,7 +394,7 @@ static void edit_params(int argc, char** argv) {
         if (dir_ent->d_name[strlen(dir_ent->d_name) - 1] == 'o' &&
             dir_ent->d_name[strlen(dir_ent->d_name) - 2] == '.') {
 
-          if (passthrough || argv[i][0] == '-' || is_llvm_file(ar_file) == 0) {
+          if (passthrough || is_llvm_file(ar_file) == 0) {
 
             if (is_duplicate(ld_params, ld_param_cnt, ar_file) == 0) {
 
@@ -357,7 +424,7 @@ static void edit_params(int argc, char** argv) {
 
         } else
 
-            if (dir_ent->d_name[0] != '.')
+            if (dir_ent->d_name[0] != '.' && !be_quiet)
           WARNF("Unusual file found in ar archive %s: %s", argv[i], ar_file);
 
       }
@@ -569,6 +636,12 @@ int main(int argc, char** argv) {
 
   edit_params(argc, argv);  // here most of the magic happens :-)
 
+  if (debug)
+    SAYF(cMGN "[D] " cRST
+              "param counts: ar:%u lib:%u ld:%u link:%u opt:%u instr:%u\n",
+         ar_dir_cnt, libdir_cnt, ld_param_cnt, link_param_cnt, opt_param_cnt,
+         inst_param_cnt);
+
   if (!just_version) {
 
     if (we_link == 0) {
@@ -599,7 +672,26 @@ int main(int argc, char** argv) {
 
       if (pid < 0) PFATAL("fork() failed");
       if (waitpid(pid, &status, 0) <= 0) PFATAL("waitpid() failed");
-      if (WEXITSTATUS(status) != 0) exit(WEXITSTATUS(status));
+      if (WEXITSTATUS(status) != 0) {
+
+        SAYF(bSTOP RESET_G1 CURSOR_SHOW cRST cLRD
+             "\n[-] PROGRAM ABORT : " cRST);
+        SAYF(
+            "llvm-link failed! Probable causes:\n\n"
+            " #1  If the error is \"linking globals named '...': symbol "
+            "multiply defined\"\n"
+            "     then there is nothing we can do - llvm-link is missing an "
+            "important feature\n\n"
+            " #2  If the error is \"expected top-level entity\" and then "
+            "binary output, this\n"
+            "     is because the same file is present in different .a archives "
+            "in different\n"
+            "     formats. This can be fixed by manual doing the steps afl-ld "
+            "is doing but\n"
+            "     programmatically - sorry!\n\n");
+        exit(WEXITSTATUS(status));
+
+      }
 
       /* then we perform an optimization on the collected objects files */
       if (!be_quiet)
