@@ -24,18 +24,31 @@
  */
 
 #include "afl-fuzz.h"
+#include <sys/time.h>
+#include <signal.h>
 
 /* Execute target application, monitoring for timeouts. Return status
    information. The called program will update afl->fsrv.trace_bits[]. */
 
-u8 run_target(afl_state_t* afl, u32 timeout) {
+void timeout_handle(union sigval timer_data) {
 
-  static struct itimerval it;
-  static u32              prev_timed_out = 0;
-  static u64              exec_ms = 0;
+  pid_t child_pid = timer_data.sival_int;
+  if (child_pid > 0) kill(child_pid, SIGKILL);
+
+}
+
+u8 run_target(afl_state_t *afl, u32 timeout) {
+
+  struct sigevent          timer_signal_event;
+  static timer_t           timer;
+  static struct itimerspec timer_period;
+  static struct timeval    it;
+  static u32               prev_timed_out = 0;
+  static u64               exec_ms = 0;
 
   int status = 0;
   u32 tb4;
+  int timer_status;
 
   afl->fsrv.child_timed_out = 0;
 
@@ -44,6 +57,11 @@ u8 run_target(afl_state_t* afl, u32 timeout) {
      territory. */
 
   memset(afl->fsrv.trace_bits, 0, MAP_SIZE);
+  memset(&timer_signal_event, 0, sizeof(struct sigevent));
+
+  timer_signal_event.sigev_notify = SIGEV_THREAD;
+  timer_signal_event.sigev_notify_function = timeout_handle;
+
   MEM_BARRIER();
 
   /* If we're running in "dumb" mode, we can't rely on the fork server
@@ -128,17 +146,48 @@ u8 run_target(afl_state_t* afl, u32 timeout) {
       /* Use a distinctive bitmap value to tell the parent about execv()
          falling through. */
 
-      *(u32*)afl->fsrv.trace_bits = EXEC_FAIL_SIG;
+      *(u32 *)afl->fsrv.trace_bits = EXEC_FAIL_SIG;
       exit(0);
+
+    }
+
+    /* Configure timeout using POSIX timers in dumb-mode,
+        as requested by user, then wait for child to terminate.
+     */
+
+    timer_signal_event.sigev_value.sival_int = afl->fsrv.child_pid;
+    timer_status = timer_create(CLOCK_MONOTONIC, &timer_signal_event, &timer);
+
+    if (timer_status == -1) { FATAL("Failed to create Timer"); }
+
+    timer_period.it_value.tv_sec = (timeout / 1000);
+    timer_period.it_value.tv_nsec = (timeout % 1000) * 1000000;
+    timer_period.it_interval.tv_sec = 0;
+    timer_period.it_interval.tv_nsec = 0;
+
+    timer_status = timer_settime(timer, 0, &timer_period, NULL);
+
+    if (timer_status == -1) {
+
+      timer_delete(timer);
+      if (errno == EINVAL) {
+
+        FATAL("Failed to set the timer. The timeout given is invalid.");
+
+      } else {
+
+        FATAL("Failed to set the timer to the given timeout");
+
+      }
 
     }
 
   } else {
 
-    s32 res;
-
     /* In non-dumb mode, we have the fork server up and running, so simply
        tell it to have at it, and then read back PID. */
+
+    int res;
 
     if ((res = write(afl->fsrv.fsrv_ctl_fd, &prev_timed_out, 4)) != 4) {
 
@@ -158,65 +207,94 @@ u8 run_target(afl_state_t* afl, u32 timeout) {
 
   }
 
-  /* Configure timeout, as requested by user, then wait for child to terminate.
-   */
-
-  it.it_value.tv_sec = (timeout / 1000);
-  it.it_value.tv_usec = (timeout % 1000) * 1000;
-
-  setitimer(ITIMER_REAL, &it, NULL);
-
-  /* The SIGALRM handler simply kills the afl->fsrv.child_pid and sets
-   * afl->fsrv.child_timed_out. */
-
   if (afl->dumb_mode == 1 || afl->no_forkserver) {
 
-    if (waitpid(afl->fsrv.child_pid, &status, 0) <= 0)
+    if (waitpid(afl->fsrv.child_pid, &status, 0) <= 0) {
+
+      timer_delete(timer);
       PFATAL("waitpid() failed");
+
+    }
+
+    timer_gettime(timer, &timer_period);
+    exec_ms = (u64)timeout - (timer_period.it_value.tv_sec * 1000 +
+                              timer_period.it_value.tv_nsec / 1000000);
+    timer_period.it_value.tv_sec = 0;
+    timer_period.it_value.tv_nsec = 0;
+
+    timer_status = timer_settime(timer, 0, &timer_period, NULL);
+
+    if (timer_status == -1) {
+
+      timer_delete(timer);
+      FATAL("Failed to reset the timer.");
+
+    }
+
+    timer_delete(timer);
 
   } else {
 
+    /* In non-dumb mode, use select to monitor the forkserver for timeouts.
+     */
+
     s32 res;
+    int sret;
 
-    if ((res = read(afl->fsrv.fsrv_st_fd, &status, 4)) != 4) {
+    fd_set readfds;
+    FD_ZERO(&readfds);
+    FD_SET(afl->fsrv.fsrv_st_fd, &readfds);
+    it.tv_sec = ((timeout) / 1000);
+    it.tv_usec = ((timeout) % 1000) * 1000;
 
-      if (afl->stop_soon) return 0;
-      SAYF(
-          "\n" cLRD "[-] " cRST
-          "Unable to communicate with fork server. Some possible reasons:\n\n"
-          "    - You've run out of memory. Use -m to increase the the memory "
-          "limit\n"
-          "      to something higher than %lld.\n"
-          "    - The binary or one of the libraries it uses manages to create\n"
-          "      threads before the forkserver initializes.\n"
-          "    - The binary, at least in some circumstances, exits in a way "
-          "that\n"
-          "      also kills the parent process - raise() could be the "
-          "culprit.\n"
-          "    - If using persistent mode with QEMU, AFL_QEMU_PERSISTENT_ADDR "
-          "is\n"
-          "      probably not valid (hint: add the base address in case of PIE)"
-          "\n\n"
-          "If all else fails you can disable the fork server via "
-          "AFL_NO_FORKSRV=1.\n",
-          afl->fsrv.mem_limit);
-      RPFATAL(res, "Unable to communicate with fork server");
+    sret = select(afl->fsrv.fsrv_st_fd + 1, &readfds, NULL, NULL, &it);
+
+    if (sret == 0) {
+
+      kill(afl->fsrv.child_pid, SIGKILL);
+
+    } else {
+
+      if ((res = read(afl->fsrv.fsrv_st_fd, &status, 4)) != 4) {
+
+        if (afl->stop_soon) return 0;
+        SAYF(
+            "\n" cLRD "[-] " cRST
+            "Unable to communicate with fork server. Some possible reasons:\n\n"
+            "    - You've run out of memory. Use -m to increase the the memory "
+            "limit\n"
+            "      to something higher than %lld.\n"
+            "    - The binary or one of the libraries it uses manages to "
+            "create\n"
+            "      threads before the forkserver initializes.\n"
+            "    - The binary, at least in some circumstances, exits in a way "
+            "that\n"
+            "      also kills the parent process - raise() could be the "
+            "culprit.\n"
+            "    - If using persistent mode with QEMU, "
+            "AFL_QEMU_PERSISTENT_ADDR "
+            "is\n"
+            "      probably not valid (hint: add the base address in case of "
+            "PIE)"
+            "\n\n"
+            "If all else fails you can disable the fork server via "
+            "AFL_NO_FORKSRV=1.\n",
+            afl->fsrv.mem_limit);
+        RPFATAL(res, "Unable to communicate with fork server");
+
+      }
 
     }
+
+    exec_ms = (u64)timeout - (it.tv_sec * 1000 + it.tv_usec / 1000);
+    it.tv_sec = 0;
+    it.tv_usec = 0;
 
   }
 
   if (!WIFSTOPPED(status)) afl->fsrv.child_pid = 0;
 
-  getitimer(ITIMER_REAL, &it);
-  exec_ms =
-      (u64)timeout - (it.it_value.tv_sec * 1000 + it.it_value.tv_usec / 1000);
-  if (afl->slowest_exec_ms < exec_ms) afl->slowest_exec_ms = exec_ms;
-
-  it.it_value.tv_sec = 0;
-  it.it_value.tv_usec = 0;
-
-  setitimer(ITIMER_REAL, &it, NULL);
+  if (exec_ms >= timeout) { afl->fsrv.child_timed_out = 1; }
 
   ++afl->total_execs;
 
@@ -226,12 +304,12 @@ u8 run_target(afl_state_t* afl, u32 timeout) {
 
   MEM_BARRIER();
 
-  tb4 = *(u32*)afl->fsrv.trace_bits;
+  tb4 = *(u32 *)afl->fsrv.trace_bits;
 
 #ifdef WORD_SIZE_64
-  classify_counts((u64*)afl->fsrv.trace_bits);
+  classify_counts((u64 *)afl->fsrv.trace_bits);
 #else
-  classify_counts((u32*)afl->fsrv.trace_bits);
+  classify_counts((u32 *)afl->fsrv.trace_bits);
 #endif                                                     /* ^WORD_SIZE_64 */
 
   prev_timed_out = afl->fsrv.child_timed_out;
@@ -270,13 +348,13 @@ u8 run_target(afl_state_t* afl, u32 timeout) {
    old file is unlinked and a new one is created. Otherwise, afl->fsrv.out_fd is
    rewound and truncated. */
 
-void write_to_testcase(afl_state_t* afl, void* mem, u32 len) {
+void write_to_testcase(afl_state_t *afl, void *mem, u32 len) {
 
   s32 fd = afl->fsrv.out_fd;
 
 #ifdef _AFL_DOCUMENT_MUTATIONS
   s32   doc_fd;
-  char* fn = alloc_printf("%s/mutations/%09u:%s", afl->out_dir,
+  char *fn = alloc_printf("%s/mutations/%09u:%s", afl->out_dir,
                           afl->document_counter++, describe_op(0));
   if (fn != NULL) {
 
@@ -315,7 +393,7 @@ void write_to_testcase(afl_state_t* afl, void* mem, u32 len) {
 
   if (afl->mutator && afl->mutator->afl_custom_pre_save) {
 
-    u8*    new_data;
+    u8 *   new_data;
     size_t new_size =
         afl->mutator->afl_custom_pre_save(afl, mem, len, &new_data);
     ck_write(fd, new_data, new_size, afl->fsrv.out_file);
@@ -340,7 +418,7 @@ void write_to_testcase(afl_state_t* afl, void* mem, u32 len) {
 
 /* The same, but with an adjustable gap. Used for trimming. */
 
-static void write_with_gap(afl_state_t* afl, void* mem, u32 len, u32 skip_at,
+static void write_with_gap(afl_state_t *afl, void *mem, u32 len, u32 skip_at,
                            u32 skip_len) {
 
   s32 fd = afl->fsrv.out_fd;
@@ -367,7 +445,7 @@ static void write_with_gap(afl_state_t* afl, void* mem, u32 len, u32 skip_at,
 
   if (skip_at) ck_write(fd, mem, skip_at, afl->fsrv.out_file);
 
-  u8* memu8 = mem;
+  u8 *memu8 = mem;
   if (tail_len)
     ck_write(fd, memu8 + skip_at + skip_len, tail_len, afl->fsrv.out_file);
 
@@ -386,7 +464,7 @@ static void write_with_gap(afl_state_t* afl, void* mem, u32 len, u32 skip_at,
    to warn about flaky or otherwise problematic test cases early on; and when
    new paths are discovered to detect variable behavior and so on. */
 
-u8 calibrate_case(afl_state_t* afl, struct queue_entry* q, u8* use_mem,
+u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
                   u32 handicap, u8 from_queue) {
 
   static u8 first_trace[MAP_SIZE];
@@ -398,7 +476,7 @@ u8 calibrate_case(afl_state_t* afl, struct queue_entry* q, u8* use_mem,
 
   s32 old_sc = afl->stage_cur, old_sm = afl->stage_max;
   u32 use_tmout = afl->fsrv.exec_tmout;
-  u8* old_sn = afl->stage_name;
+  u8 *old_sn = afl->stage_name;
 
   /* Be a bit more generous about timeouts when resuming sessions, or when
      trying to calibrate already-added finds. This helps avoid trouble due
@@ -545,10 +623,10 @@ abort_calibration:
 
 /* Grab interesting test cases from other fuzzers. */
 
-void sync_fuzzers(afl_state_t* afl) {
+void sync_fuzzers(afl_state_t *afl) {
 
-  DIR*           sd;
-  struct dirent* sd_ent;
+  DIR *          sd;
+  struct dirent *sd_ent;
   u32            sync_cnt = 0;
 
   sd = opendir(afl->sync_dir);
@@ -564,8 +642,8 @@ void sync_fuzzers(afl_state_t* afl) {
 
     static u8 stage_tmp[128];
 
-    DIR*           qd;
-    struct dirent* qd_ent;
+    DIR *          qd;
+    struct dirent *qd_ent;
     u8 *           qd_path, *qd_synced_path;
     u32            min_accept = 0, next_min_accept;
 
@@ -612,7 +690,7 @@ void sync_fuzzers(afl_state_t* afl) {
 
     while ((qd_ent = readdir(qd))) {
 
-      u8*         path;
+      u8 *        path;
       s32         fd;
       struct stat st;
 
@@ -646,7 +724,7 @@ void sync_fuzzers(afl_state_t* afl) {
       if (st.st_size && st.st_size <= MAX_FILE) {
 
         u8  fault;
-        u8* mem = mmap(0, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        u8 *mem = mmap(0, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 
         if (mem == MAP_FAILED) PFATAL("Unable to mmap '%s'", path);
 
@@ -693,7 +771,7 @@ void sync_fuzzers(afl_state_t* afl) {
    trimmer uses power-of-two increments somewhere between 1/16 and 1/1024 of
    file size, to keep the stage short and sweet. */
 
-u8 trim_case(afl_state_t* afl, struct queue_entry* q, u8* in_buf) {
+u8 trim_case(afl_state_t *afl, struct queue_entry *q, u8 *in_buf) {
 
   /* Custom mutator trimmer */
   if (afl->mutator && afl->mutator->afl_custom_trim)
@@ -829,7 +907,7 @@ abort_trimming:
    error conditions, returning 1 if it's time to bail out. This is
    a helper function for fuzz_one(). */
 
-u8 common_fuzz_stuff(afl_state_t* afl, u8* out_buf, u32 len) {
+u8 common_fuzz_stuff(afl_state_t *afl, u8 *out_buf, u32 len) {
 
   u8 fault;
 

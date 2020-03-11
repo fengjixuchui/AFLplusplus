@@ -41,6 +41,7 @@
 #include <sys/time.h>
 #include <sys/wait.h>
 #include <sys/resource.h>
+#include <sys/select.h>
 
 /* Describe integer as memory size. */
 
@@ -135,6 +136,21 @@ void handle_timeout(int sig) {
 
 void afl_fsrv_init(afl_forkserver_t *fsrv) {
 
+  // this structure needs default so we initialize it if this was not done
+  // already
+
+  fsrv->use_stdin = 1;
+  fsrv->out_fd = -1;
+  fsrv->out_dir_fd = -1;
+  fsrv->dev_null_fd = -1;
+#ifndef HAVE_ARC4RANDOM
+  fsrv->dev_urandom_fd = -1;
+#endif
+  fsrv->exec_tmout = EXEC_TIMEOUT;
+  fsrv->mem_limit = MEM_LIMIT;
+  fsrv->child_pid = -1;
+  fsrv->out_dir_fd = -1;
+
   list_append(&fsrv_list, fsrv);
 
 }
@@ -149,10 +165,10 @@ void afl_fsrv_init(afl_forkserver_t *fsrv) {
 
 void afl_fsrv_start(afl_forkserver_t *fsrv, char **argv) {
 
-  static struct itimerval it;
-  int                     st_pipe[2], ctl_pipe[2];
-  int                     status;
-  s32                     rlen;
+  struct timeval timeout;
+  int            st_pipe[2], ctl_pipe[2];
+  int            status;
+  s32            rlen;
 
   if (!getenv("AFL_QUIET")) ACTF("Spinning up the fork server...");
 
@@ -292,19 +308,31 @@ void afl_fsrv_start(afl_forkserver_t *fsrv, char **argv) {
 
   if (fsrv->exec_tmout) {
 
-    it.it_value.tv_sec = ((fsrv->exec_tmout * FORK_WAIT_MULT) / 1000);
-    it.it_value.tv_usec = ((fsrv->exec_tmout * FORK_WAIT_MULT) % 1000) * 1000;
+    fd_set readfds;
+
+    FD_ZERO(&readfds);
+    FD_SET(fsrv->fsrv_st_fd, &readfds);
+    timeout.tv_sec = ((fsrv->exec_tmout * FORK_WAIT_MULT) / 1000);
+    timeout.tv_usec = ((fsrv->exec_tmout * FORK_WAIT_MULT) % 1000) * 1000;
+
+    int sret = select(fsrv->fsrv_st_fd + 1, &readfds, NULL, NULL, &timeout);
+
+    if (sret == 0) {
+
+      fsrv->child_timed_out = 1;
+      kill(fsrv->child_pid, SIGKILL);
+
+    } else {
+
+      rlen = read(fsrv->fsrv_st_fd, &status, 4);
+
+    }
+
+  } else {
+
+    rlen = read(fsrv->fsrv_st_fd, &status, 4);
 
   }
-
-  setitimer(ITIMER_REAL, &it, NULL);
-
-  rlen = read(fsrv->fsrv_st_fd, &status, 4);
-
-  it.it_value.tv_sec = 0;
-  it.it_value.tv_usec = 0;
-
-  setitimer(ITIMER_REAL, &it, NULL);
 
   /* If we have a four-byte "hello" message from the server, we're all set.
      Otherwise, try to figure out what went wrong. */

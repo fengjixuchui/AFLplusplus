@@ -5,8 +5,9 @@
    Originally written by Michal Zalewski
 
    Now maintained by Marc Heuse <mh@mh-sec.de>,
-                        Heiko Eißfeldt <heiko.eissfeldt@hexco.de> and
-                        Andrea Fioraldi <andreafioraldi@gmail.com>
+                     Heiko Eißfeldt <heiko.eissfeldt@hexco.de>,
+                     Andrea Fioraldi <andreafioraldi@gmail.com>,
+                     Dominik Maier <mail@dmnk.co>
 
    Copyright 2016, 2017 Google Inc. All rights reserved.
    Copyright 2019-2020 AFLplusplus Project. All rights reserved.
@@ -107,7 +108,7 @@
 
  */
 
-static const u8* trampoline_fmt_32 =
+static const u8 *trampoline_fmt_32 =
 
     "\n"
     "/* --- AFL TRAMPOLINE (32-BIT) --- */\n"
@@ -130,7 +131,7 @@ static const u8* trampoline_fmt_32 =
     "/* --- END --- */\n"
     "\n";
 
-static const u8* trampoline_fmt_64 =
+static const u8 *trampoline_fmt_64 =
 
     "\n"
     "/* --- AFL TRAMPOLINE (64-BIT) --- */\n"
@@ -151,7 +152,7 @@ static const u8* trampoline_fmt_64 =
     "/* --- END --- */\n"
     "\n";
 
-static const u8* main_payload_32 = 
+static const u8*main_payload_32 = 
 
   "\n"
   "/* --- AFL MAIN PAYLOAD (32-BIT) --- */\n"
