@@ -70,6 +70,7 @@
   | laf-intel / CompCov     |         |     x     |            | x86[_64]/arm[64] | x86[_64]/arm |
   | CmpLog                  |         |     x     |            | x86[_64]/arm[64] |              |
   | Whitelist               |         |     x     |     x      |        (x)(3)    |              |
+  | non-colliding coverage  |         |     x(4)  |            |        (x)(5)    |              |
   | InsTrim                 |         |     x     |            |                  |              |
 
   neverZero:
@@ -79,6 +80,10 @@
   (2) gcc creates non-performant code, hence it is disabled in gcc_plugin
 
   (3) partially via AFL_CODE_START/AFL_CODE_END
+
+  (4) Only for LLVM >= 9 and not all targets compile
+
+  (5) upcoming, development in branch
 
   So all in all this is the best-of afl that is currently out there :-)
 
@@ -306,7 +311,7 @@ $ ./build_qemu_support.sh
 
 For additional instructions and caveats, see [qemu_mode/README.md](qemu_mode/README.md).
 
-If possible you should use the persistent mode, see [README.persistent.md](README.persistent.md).
+If possible you should use the persistent mode, see [qemu_mode/README.persistent.md](qemu_mode/README.persistent.md).
 
 The mode is approximately 2-5x slower than compile-time instrumentation, is
 less conducive to parallelization, and may have some other quirks.

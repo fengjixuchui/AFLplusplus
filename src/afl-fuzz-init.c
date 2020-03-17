@@ -43,7 +43,7 @@ void bind_to_free_cpu(afl_state_t *afl) {
 
   if (afl->cpu_core_count < 2) return;
 
-  if (getenv("AFL_NO_AFFINITY")) {
+  if (afl->afl_env.afl_no_affinity) {
 
     WARNF("Not binding to a CPU core (AFL_NO_AFFINITY set).");
     return;
@@ -275,7 +275,7 @@ cpuset_destroy(c);
 void setup_post(afl_state_t *afl) {
 
   void *dh;
-  u8 *  fn = get_afl_env("AFL_POST_LIBRARY");
+  u8 *  fn = afl->afl_env.afl_post_library;
   u32   tlen = 6;
 
   if (!fn) return;
@@ -373,7 +373,7 @@ void read_testcases(afl_state_t *afl) {
 
     u8 passed_det = 0;
 
-    ck_free(nl[i]);                                          /* not tracked */
+    free(nl[i]);                                             /* not tracked */
 
     if (lstat(fn2, &st) || access(fn2, R_OK))
       PFATAL("Unable to access '%s'", fn2);
@@ -404,7 +404,7 @@ void read_testcases(afl_state_t *afl) {
 
   }
 
-  ck_free(nl);                                               /* not tracked */
+  free(nl);                                                  /* not tracked */
 
   if (!afl->queued_paths) {
 
@@ -448,7 +448,7 @@ void perform_dry_run(afl_state_t *afl) {
 
   struct queue_entry *q = afl->queue;
   u32                 cal_failures = 0;
-  u8 *                skip_crashes = get_afl_env("AFL_SKIP_CRASHES");
+  u8 *                skip_crashes = afl->afl_env.afl_skip_crashes;
 
   while (q) {
 
@@ -1063,9 +1063,8 @@ static void handle_existing_out_dir(afl_state_t *afl) {
            "directory manually,\n"
            "    or specify a different output location for this job. To resume "
            "the old\n"
-           "    session, put '-' as the input directory in the command line "
-           "('-i -') or set the AFL_AUTORESUME=1 env variable and\n"
-           "    try again.\n",
+           "    session, pass '-' as input directory in the command line ('-i -')\n"
+           "    or set the 'AFL_AUTORESUME=1' env variable and try again.\n",
            OUTPUT_GRACE);
 
       FATAL("At-risk data found in '%s'", afl->out_dir);
@@ -1510,7 +1509,8 @@ void check_crash_handling(void) {
         "extended delay\n"
         "    between stumbling upon a crash and having this information "
         "relayed to the\n"
-        "    fuzzer via the standard waitpid() API.\n\n"
+        "    fuzzer via the standard waitpid() API.\n"
+        "    If you're just testing, set 'AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1'.\n\n"
 
         "    To avoid having crashes misinterpreted as timeouts, please log in "
         "as root\n"
@@ -1538,7 +1538,7 @@ void check_cpu_governor(afl_state_t *afl) {
   u8    tmp[128];
   u64   min = 0, max = 0;
 
-  if (get_afl_env("AFL_SKIP_CPUFREQ")) return;
+  if (afl->afl_env.afl_skip_cpufreq) return;
 
   if (afl->cpu_aff > 0)
     snprintf(tmp, sizeof(tmp), "%s%d%s", "/sys/devices/system/cpu/cpu",
@@ -1619,7 +1619,7 @@ void check_cpu_governor(afl_state_t *afl) {
 #elif defined __APPLE__
   u64 min = 0, max = 0;
   size_t mlen = sizeof(min);
-  if (get_afl_env("AFL_SKIP_CPUFREQ")) return;
+  if (afl->afl_env.afl_skip_cpufreq) return;
 
   ACTF("Checking CPU scaling governor...");
 
@@ -1906,7 +1906,7 @@ void check_binary(afl_state_t *afl, u8 *fname) {
 
   }
 
-  if (get_afl_env("AFL_SKIP_BIN_CHECK") || afl->use_wine) return;
+  if (afl->afl_env.afl_skip_bin_check || afl->use_wine) return;
 
   /* Check for blatant user errors. */
 
@@ -2078,7 +2078,7 @@ void check_if_tty(afl_state_t *afl) {
 
   struct winsize ws;
 
-  if (get_afl_env("AFL_NO_UI")) {
+  if (afl->afl_env.afl_no_ui) {
 
     OKF("Disabling the UI because AFL_NO_UI is set.");
     afl->not_on_tty = 1;

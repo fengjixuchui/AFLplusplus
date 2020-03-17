@@ -139,7 +139,7 @@ static void usage(afl_state_t *afl, u8 *argv0, int more_help) {
 
       "Other stuff:\n"
       "  -T text       - text banner to show on the screen\n"
-      "  -M / -S id    - distributed mode (see parallel_fuzzing.md)\n"
+      "  -M / -S id    - distributed mode (see docs/parallel_fuzzing.md)\n"
       "  -I command    - execute this command/script when a new crash is "
       "found\n"
       "  -B bitmap.txt - mutate a specific test case, use the out/fuzz_bitmap "
@@ -244,6 +244,8 @@ int main(int argc, char **argv_orig, char **envp) {
 
   afl_state_init(afl);
   afl_fsrv_init(&afl->fsrv);
+
+  read_afl_environment(afl, envp);
 
   SAYF(cCYA "afl-fuzz" VERSION cRST
             " based on afl by Michal Zalewski and a big online community\n");
@@ -472,7 +474,7 @@ int main(int argc, char **argv_orig, char **envp) {
       case 'n':                                                /* dumb mode */
 
         if (afl->dumb_mode) FATAL("Multiple -n options not supported");
-        if (get_afl_env("AFL_DUMB_FORKSRV"))
+        if (afl->afl_env.afl_dumb_forksrv)
           afl->dumb_mode = 2;
         else
           afl->dumb_mode = 1;
@@ -681,8 +683,6 @@ int main(int argc, char **argv_orig, char **envp) {
         "Using -M master with the AFL_CUSTOM_MUTATOR_ONLY mutator options will "
         "result in no deterministic mutations being done!");
 
-  check_environment_vars(envp);
-
   if (afl->fixed_seed) OKF("Running with fixed seed: %u", (u32)afl->init_seed);
   srandom((u32)afl->init_seed);
 
@@ -768,16 +768,16 @@ int main(int argc, char **argv_orig, char **envp) {
   if (get_afl_env("AFL_SHUFFLE_QUEUE")) afl->shuffle_queue = 1;
   if (get_afl_env("AFL_FAST_CAL")) afl->fast_cal = 1;
 
-  if (get_afl_env("AFL_AUTORESUME")) {
+  if (afl->afl_env.afl_autoresume) {
 
     afl->autoresume = 1;
     if (afl->in_place_resume) SAYF("AFL_AUTORESUME has no effect for '-i -'");
 
   }
 
-  if (get_afl_env("AFL_HANG_TMOUT")) {
+  if (afl->afl_env.afl_hang_tmout) {
 
-    afl->hang_tmout = atoi(getenv("AFL_HANG_TMOUT"));
+    afl->hang_tmout = atoi(afl->afl_env.afl_hang_tmout);
     if (!afl->hang_tmout) FATAL("Invalid value of AFL_HANG_TMOUT");
 
   }
@@ -785,12 +785,14 @@ int main(int argc, char **argv_orig, char **envp) {
   if (afl->dumb_mode == 2 && afl->no_forkserver)
     FATAL("AFL_DUMB_FORKSRV and AFL_NO_FORKSRV are mutually exclusive");
 
+  afl->fsrv.use_fauxsrv = afl->dumb_mode == 1 || afl->no_forkserver;
+
   if (getenv("LD_PRELOAD"))
     WARNF(
         "LD_PRELOAD is set, are you sure that is what to you want to do "
         "instead of using AFL_PRELOAD?");
 
-  if (get_afl_env("AFL_PRELOAD")) {
+  if (afl->afl_env.afl_preload) {
 
     if (afl->qemu_mode) {
 
@@ -836,7 +838,7 @@ int main(int argc, char **argv_orig, char **envp) {
   fix_up_banner(afl, argv[optind]);
 
   check_if_tty(afl);
-  if (get_afl_env("AFL_FORCE_UI")) afl->not_on_tty = 0;
+  if (afl->afl_env.afl_force_ui) afl->not_on_tty = 0;
 
   if (get_afl_env("AFL_CAL_FAST")) {
 
@@ -848,7 +850,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   if (get_afl_env("AFL_DEBUG")) afl->debug = 1;
 
-  if (get_afl_env("AFL_CUSTOM_MUTATOR_ONLY")) {
+  if (afl->afl_env.afl_custom_mutator_only) {
 
     /* This ensures we don't proceed to havoc/splice */
     afl->custom_only = 1;
@@ -892,7 +894,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   if (!afl->timeout_given) find_timeout(afl);
 
-  if ((afl->tmp_dir = get_afl_env("AFL_TMPDIR")) != NULL &&
+  if ((afl->tmp_dir = afl->afl_env.afl_tmpdir) != NULL &&
       !afl->in_place_resume) {
 
     char tmpfile[afl->file_extension ? strlen(afl->tmp_dir) + 1 + 10 + 1 +
@@ -1065,14 +1067,14 @@ int main(int argc, char **argv_orig, char **envp) {
       prev_queued = afl->queued_paths;
 
       if (afl->sync_id && afl->queue_cycle == 1 &&
-          get_afl_env("AFL_IMPORT_FIRST"))
+          afl->afl_env.afl_import_first)
         sync_fuzzers(afl);
 
     }
 
     skipped_fuzz = fuzz_one(afl);
 
-    if (!afl->stop_soon && afl->sync_id && !skipped_fuzz) {
+    if (!skipped_fuzz && !afl->stop_soon && afl->sync_id) {
 
       if (!(sync_interval_cnt++ % SYNC_INTERVAL)) sync_fuzzers(afl);
 
@@ -1143,6 +1145,9 @@ int main(int argc, char **argv_orig, char **envp) {
 
 stop_fuzzing:
 
+  afl->force_ui_update = 1;  // ensure the screen is reprinted
+  show_stats(afl);           // print the screen one last time
+
   SAYF(CURSOR_SHOW cLRD "\n\n+++ Testing aborted %s +++\n" cRST,
        afl->stop_soon == 2 ? "programmatically" : "by user");
 
@@ -1173,7 +1178,7 @@ stop_fuzzing:
   ck_free(afl->fsrv.target_path);
   ck_free(afl->fsrv.out_file);
   ck_free(afl->sync_id);
-  ck_free(afl);
+  free(afl);                                                 /* not tracked */
 
   argv_cpy_free(argv);
 

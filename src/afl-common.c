@@ -35,43 +35,60 @@
 #ifndef __glibc__
 #include <unistd.h>
 #endif
+#include <limits.h>
 
 extern u8 be_quiet;
+char *    afl_environment_variables[] = {
+
+    "AFL_ALIGNED_ALLOC", "AFL_ALLOW_TMP", "AFL_ANALYZE_HEX", "AFL_AS",
+    "AFL_AUTORESUME", "AFL_AS_FORCE_INSTRUMENT", "AFL_BENCH_JUST_ONE",
+    "AFL_BENCH_UNTIL_CRASH", "AFL_CAL_FAST", "AFL_CC", "AFL_CMIN_ALLOW_ANY",
+    "AFL_CMIN_CRASHES_ONLY", "AFL_CODE_END", "AFL_CODE_START",
+    "AFL_COMPCOV_BINNAME", "AFL_COMPCOV_LEVEL", "AFL_CUSTOM_MUTATOR_LIBRARY",
+    "AFL_CUSTOM_MUTATOR_ONLY", "AFL_CXX", "AFL_DEBUG", "AFL_DEBUG_CHILD_OUTPUT",
+    //"AFL_DEFER_FORKSRV", // not implemented anymore, so warn additionally
+    "AFL_DISABLE_TRIM", "AFL_DONT_OPTIMIZE", "AFL_DUMB_FORKSRV",
+    "AFL_ENTRYPOINT", "AFL_EXIT_WHEN_DONE", "AFL_FAST_CAL", "AFL_FORCE_UI",
+    "AFL_GCC_WHITELIST", "AFL_GCJ", "AFL_HANG_TMOUT", "AFL_HARDEN",
+    "AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES", "AFL_IMPORT_FIRST",
+    "AFL_INST_LIBS", "AFL_INST_RATIO", "AFL_KEEP_TRACES", "AFL_KEEP_ASSEMBLY",
+    "AFL_LD_HARD_FAIL", "AFL_LD_LIMIT_MB", "AFL_LD_NO_CALLOC_OVER",
+    "AFL_LD_PRELOAD", "AFL_LD_VERBOSE", "AFL_LLVM_CMPLOG", "AFL_LLVM_INSTRIM",
+    "AFL_LLVM_INSTRIM_LOOPHEAD", "AFL_LLVM_INSTRIM_SKIPSINGLEBLOCK",
+    "AFL_LLVM_LAF_SPLIT_COMPARES", "AFL_LLVM_LAF_SPLIT_COMPARES_BITW",
+    "AFL_LLVM_LAF_SPLIT_FLOATS", "AFL_LLVM_LAF_SPLIT_SWITCHES",
+    "AFL_LLVM_LAF_TRANSFORM_COMPARES", "AFL_LLVM_NOT_ZERO",
+    "AFL_LLVM_WHITELIST", "AFL_NO_AFFINITY", "AFL_LLVM_LTO_STARTID",
+    "AFL_LLVM_LTO_DONTWRITEID", "AFL_NO_ARITH", "AFL_NO_BUILTIN",
+    "AFL_NO_CPU_RED", "AFL_NO_FORKSRV", "AFL_NO_UI",
+    "AFL_NO_X86",  // not really an env but we dont want to warn on it
+    "AFL_PATH", "AFL_PERFORMANCE_FILE",
+    //"AFL_PERSISTENT", // not implemented anymore, so warn additionally
+    "AFL_POST_LIBRARY", "AFL_PRELOAD", "AFL_PYTHON_MODULE", "AFL_QEMU_COMPCOV",
+    "AFL_QEMU_COMPCOV_DEBUG", "AFL_QEMU_DEBUG_MAPS", "AFL_QEMU_DISABLE_CACHE",
+    "AFL_QEMU_PERSISTENT_ADDR", "AFL_QEMU_PERSISTENT_CNT",
+    "AFL_QEMU_PERSISTENT_GPR", "AFL_QEMU_PERSISTENT_HOOK",
+    "AFL_QEMU_PERSISTENT_RET", "AFL_QEMU_PERSISTENT_RETADDR_OFFSET",
+    "AFL_QUIET", "AFL_RANDOM_ALLOC_CANARY", "AFL_REAL_PATH",
+    "AFL_SHUFFLE_QUEUE", "AFL_SKIP_BIN_CHECK", "AFL_SKIP_CPUFREQ",
+    "AFL_SKIP_CRASHES", "AFL_TMIN_EXACT", "AFL_TMPDIR", "AFL_TOKEN_FILE",
+    "AFL_TRACE_PC", "AFL_USE_ASAN", "AFL_USE_MSAN", "AFL_USE_TRACE_PC",
+    "AFL_USE_UBSAN", "AFL_WINE_PATH", NULL};
 
 void detect_file_args(char **argv, u8 *prog_in, u8 *use_stdin) {
 
   u32 i = 0;
-#ifdef __GLIBC__
-  u8 *cwd = getcwd(NULL, 0);                /* non portable glibc extension */
-#else
-  u8 *  cwd;
-  char *buf;
-  long  size = pathconf(".", _PC_PATH_MAX);
-  if ((buf = (char *)malloc((size_t)size)) != NULL) {
+  u8  cwd[PATH_MAX];
+  if (getcwd(cwd, (size_t)sizeof(cwd)) == NULL) { PFATAL("getcwd() failed"); }
 
-    cwd = getcwd(buf, (size_t)size);                    /* portable version */
-    ck_free(buf);
-
-  } else {
-
-    cwd = 0;                                          /* for dumb compilers */
-    PFATAL("getcwd() failed");
-
-  }
-
-#endif
-
-  if (!cwd) PFATAL("getcwd() failed");
-
-  // TODO: free allocs below... somewhere.
-
+  /* we are working with libc-heap-allocated argvs. So do not mix them with
+   * other allocation APIs like ck_alloc. That would disturb the free() calls.
+   */
   while (argv[i]) {
 
     u8 *aa_loc = strstr(argv[i], "@@");
 
     if (aa_loc) {
-
-      u8 *aa_subst, *n_arg;
 
       if (!prog_in) FATAL("@@ syntax is not supported by this tool.");
 
@@ -79,22 +96,26 @@ void detect_file_args(char **argv, u8 *prog_in, u8 *use_stdin) {
 
       if (prog_in[0] != 0) {  // not afl-showmap special case
 
+        u8 *n_arg;
+
         /* Be sure that we're always using fully-qualified paths. */
 
-        if (prog_in[0] == '/')
-          aa_subst = prog_in;
-        else
-          aa_subst = alloc_printf("%s/%s", cwd, prog_in);
+        *aa_loc = 0;
 
         /* Construct a replacement argv value. */
 
-        *aa_loc = 0;
-        n_arg = alloc_printf("%s%s%s", argv[i], aa_subst, aa_loc + 2);
+        if (prog_in[0] == '/') {
+
+          n_arg = alloc_printf("%s%s%s", argv[i], prog_in, aa_loc + 2);
+
+        } else {
+
+          n_arg = alloc_printf("%s%s/%s%s", argv[i], cwd, prog_in, aa_loc + 2);
+
+        }
+
         ck_free(argv[i]);
         argv[i] = n_arg;
-        //*aa_loc = '@';
-
-        if (prog_in[0] != '/') ck_free(aa_subst);
 
       }
 
@@ -104,7 +125,7 @@ void detect_file_args(char **argv, u8 *prog_in, u8 *use_stdin) {
 
   }
 
-  ck_free(cwd);                                              /* not tracked */
+  /* argvs are automatically freed at exit. */
 
 }
 

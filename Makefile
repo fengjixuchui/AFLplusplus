@@ -48,8 +48,10 @@ else
  endif
 endif
 
-ifeq "$(shell echo 'int main() {return 0; }' | $(CC) -x c - -march=native -o .test 2>/dev/null && echo 1 || echo 0 ; rm -f .test )" "1"
+ifneq "$(shell uname)" "Darwin"
+ ifeq "$(shell echo 'int main() {return 0; }' | $(CC) -x c - -march=native -o .test 2>/dev/null && echo 1 || echo 0 ; rm -f .test )" "1"
 	CFLAGS_OPT = -march=native
+ endif
 endif
 
 ifneq "$(shell uname -m)" "x86_64"
@@ -146,7 +148,7 @@ ifdef STATIC
   PYFLAGS=
 
   CFLAGS += -static
-  LDFLAGS += -lm -lrt -lpthread -lz -lutil
+  LDFLAGS += -lm -lpthread -lz -lutil
 endif
 
 ifeq "$(shell echo '$(HASH)include <sys/ipc.h>@$(HASH)include <sys/shm.h>@int main() { int _id = shmget(IPC_PRIVATE, 65536, IPC_CREAT | IPC_EXCL | 0600); shmctl(_id, IPC_RMID, 0); return 0;}' | tr @ '\n' | $(CC) -x c - -o .test2 2>/dev/null && echo 1 || echo 0 ; rm -f .test2 )" "1"
@@ -154,13 +156,13 @@ ifeq "$(shell echo '$(HASH)include <sys/ipc.h>@$(HASH)include <sys/shm.h>@int ma
 else
 	SHMAT_OK=0
 	CFLAGS+=-DUSEMMAP=1
-	LDFLAGS+=-Wno-deprecated-declarations -lrt
+	LDFLAGS+=-Wno-deprecated-declarations
 endif
 
 ifeq "$(TEST_MMAP)" "1"
 	SHMAT_OK=0
 	CFLAGS+=-DUSEMMAP=1
-	LDFLAGS+=-Wno-deprecated-declarations -lrt
+	LDFLAGS+=-Wno-deprecated-declarations
 endif
 
 ifdef ASAN_BUILD
@@ -282,7 +284,7 @@ src/third_party/libradamsa/libradamsa.so: src/third_party/libradamsa/libradamsa.
 	$(MAKE) -C src/third_party/libradamsa/ CFLAGS="$(CFLAGS)"
 
 afl-fuzz: $(COMM_HDR) include/afl-fuzz.h $(AFL_FUZZ_FILES) src/afl-common.o src/afl-sharedmem.o src/afl-forkserver.o | test_x86
-	$(CC) $(CFLAGS) $(CFLAGS_FLTO) $(AFL_FUZZ_FILES) -lrt src/afl-common.o src/afl-sharedmem.o src/afl-forkserver.o -o $@ $(PYFLAGS) $(LDFLAGS)
+	$(CC) $(CFLAGS) $(CFLAGS_FLTO) $(AFL_FUZZ_FILES) src/afl-common.o src/afl-sharedmem.o src/afl-forkserver.o -o $@ $(PYFLAGS) $(LDFLAGS)
 
 afl-showmap: src/afl-showmap.c src/afl-common.o src/afl-sharedmem.o $(COMM_HDR) | test_x86
 	$(CC) $(CFLAGS) $(CFLAGS_FLTO) src/$@.c src/afl-common.o src/afl-sharedmem.o src/afl-forkserver.o -o $@ $(LDFLAGS)
@@ -298,8 +300,9 @@ afl-gotcpu: src/afl-gotcpu.c $(COMM_HDR) | test_x86
 
 
 # document all mutations and only do one run (use with only one input file!)
-document: include/afl-fuzz.h $(AFL_FUZZ_FILES) src/afl-common.o src/afl-sharedmem.o src/afl-forkserver.o $(COMM_HDR) | test_x86
-	$(CC) $(CFLAGS) $(AFL_FUZZ_FILES) -D_AFL_DOCUMENT_MUTATIONS src/afl-common.o src/afl-sharedmem.o src/afl-forkserver.o -o afl-fuzz-document $(LDFLAGS) $(PYFLAGS)
+document: $(COMM_HDR) include/afl-fuzz.h $(AFL_FUZZ_FILES) src/afl-common.o src/afl-sharedmem.o src/afl-forkserver.o | test_x86
+	$(CC) -D_AFL_DOCUMENT_MUTATIONS $(CFLAGS) $(CFLAGS_FLTO) $(AFL_FUZZ_FILES) src/afl-common.o src/afl-sharedmem.o src/afl-forkserver.o -o afl-fuzz-document $(PYFLAGS) $(LDFLAGS)
+
 
 
 code-format:
@@ -353,7 +356,7 @@ all_done: test_build
 .NOTPARALLEL: clean
 
 clean:
-	rm -f $(PROGS) libradamsa.so afl-fuzz-document afl-as as afl-g++ afl-clang afl-clang++ *.o src/*.o *~ a.out core core.[1-9][0-9]* *.stackdump .test .test1 .test2 test-instr .test-instr0 .test-instr1 qemu_mode/qemu-3.1.1.tar.xz afl-qemu-trace afl-gcc-fast afl-gcc-pass.so afl-gcc-rt.o afl-g++-fast *.so *.8
+	rm -f $(PROGS) libradamsa.so afl-fuzz-document afl-as as afl-g++ afl-clang afl-clang++ *.o src/*.o *~ a.out core core.[1-9][0-9]* *.stackdump .test .test1 .test2 test-instr .test-instr0 .test-instr1 qemu_mode/qemu-3.1.1.tar.xz afl-qemu-trace afl-gcc-fast afl-gcc-pass.so afl-gcc-rt.o afl-g++-fast ld *.so *.8
 	rm -rf out_dir qemu_mode/qemu-3.1.1 *.dSYM */*.dSYM
 	-$(MAKE) -C llvm_mode clean
 	-$(MAKE) -C gcc_plugin clean

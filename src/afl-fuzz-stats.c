@@ -206,7 +206,7 @@ void show_stats(afl_state_t *afl) {
 
   /* If not enough time has passed since last UI update, bail out. */
 
-  if (cur_ms - last_ms < 1000 / UI_TARGET_HZ) return;
+  if (cur_ms - last_ms < 1000 / UI_TARGET_HZ && !afl->force_ui_update) return;
 
   /* Check if we're past the 10 minute mark. */
 
@@ -274,15 +274,19 @@ void show_stats(afl_state_t *afl) {
   /* Honor AFL_EXIT_WHEN_DONE and AFL_BENCH_UNTIL_CRASH. */
 
   if (!afl->dumb_mode && afl->cycles_wo_finds > 100 &&
-      !afl->pending_not_fuzzed && get_afl_env("AFL_EXIT_WHEN_DONE"))
+      !afl->pending_not_fuzzed && afl->afl_env.afl_exit_when_done)
     afl->stop_soon = 2;
 
-  if (afl->total_crashes && get_afl_env("AFL_BENCH_UNTIL_CRASH"))
+  if (afl->total_crashes && afl->afl_env.afl_bench_until_crash)
     afl->stop_soon = 2;
 
   /* If we're not on TTY, bail out. */
 
   if (afl->not_on_tty) return;
+
+  /* If we haven't started doing things, bail out. */
+
+  if (!afl->queue_cur) return;
 
   /* Compute some mildly useful bitmap stats. */
 
@@ -484,7 +488,7 @@ void show_stats(afl_state_t *afl) {
 
   }
 
-  SAYF(bV bSTOP " stage execs : " cRST "%-20s " bSTG bV bSTOP, tmp);
+  SAYF(bV bSTOP " stage execs : " cRST "%-21s" bSTG bV bSTOP, tmp);
 
   sprintf(tmp, "%s (%0.02f%%)", DI(afl->queued_with_cov),
           ((double)afl->queued_with_cov) * 100 / afl->queued_paths);
@@ -860,7 +864,7 @@ void show_init_stats(afl_state_t *afl) {
   /* In dumb mode, re-running every timing out test case with a generous time
      limit is very expensive, so let's select a more conservative default. */
 
-  if (afl->dumb_mode && !get_afl_env("AFL_HANG_TMOUT"))
+  if (afl->dumb_mode && !(afl->afl_env.afl_hang_tmout))
     afl->hang_tmout = MIN(EXEC_TIMEOUT, afl->fsrv.exec_tmout * 2 + 100);
 
   OKF("All set and ready to roll!");

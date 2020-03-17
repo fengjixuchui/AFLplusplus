@@ -24,6 +24,7 @@
  */
 
 #include "afl-fuzz.h"
+#include "envs.h"
 
 s8  interesting_8[] = {INTERESTING_8};
 s16 interesting_16[] = {INTERESTING_8, INTERESTING_16};
@@ -38,7 +39,7 @@ u8 *doc_path = NULL;                    /* gath to documentation dir        */
 
 static void init_mopt_globals(afl_state_t *afl) {
 
-  MOpt_globals_t *core = &afl->mopt_globals_pilot;
+  MOpt_globals_t *core = &afl->mopt_globals_core;
   core->finds = afl->core_operator_finds_puppet;
   core->finds_v2 = afl->core_operator_finds_puppet_v2;
   core->cycles = afl->core_operator_cycles_puppet;
@@ -71,7 +72,7 @@ static void init_mopt_globals(afl_state_t *afl) {
 /* A global pointer to all instances is needed (for now) for signals to arrive
  */
 
-list_t afl_states = {0};
+list_t afl_states = {.element_prealloc_count = 0};
 
 /* Initializes an afl_state_t. */
 
@@ -116,6 +117,182 @@ void afl_state_init(afl_state_t *afl) {
   init_mopt_globals(afl);
 
   list_append(&afl_states, afl);
+
+}
+
+/*This sets up the environment variables for afl-fuzz into the afl_state
+ * struct*/
+
+void read_afl_environment(afl_state_t *afl, char **envp) {
+
+  int   index = 0, found = 0;
+  char *env;
+  while ((env = envp[index++]) != NULL) {
+
+    if (strncmp(env, "ALF_", 4) == 0) {
+
+      WARNF("Potentially mistyped AFL environment variable: %s", env);
+      found++;
+
+    } else if (strncmp(env, "AFL_", 4) == 0) {
+
+      int i = 0, match = 0;
+      while (match == 0 && afl_environment_variables[i] != NULL) {
+
+        size_t afl_environment_variable_len =
+            strlen(afl_environment_variables[i]);
+        if (strncmp(env, afl_environment_variables[i],
+                    afl_environment_variable_len) == 0 &&
+            env[afl_environment_variable_len] == '=') {
+
+          match = 1;
+          if (!strncmp(env, "AFL_SKIP_CPUFREQ", afl_environment_variable_len)) {
+
+            afl->afl_env.afl_skip_cpufreq = get_afl_env(env) ? 1 : 0;
+
+          } else if (!strncmp(env, "AFL_EXIT_WHEN_DONE",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_exit_when_done = get_afl_env(env) ? 1 : 0;
+
+          } else if (!strncmp(env, "AFL_NO_AFFINITY",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_no_affinity = get_afl_env(env) ? 1 : 0;
+
+          } else if (!strncmp(env, "AFL_SKIP_CRASHES",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_skip_crashes = (u8 *)get_afl_env(env);
+
+          } else if (!strncmp(env, "AFL_HANG_TMOUT",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_hang_tmout = (u8 *)get_afl_env(env);
+
+          } else if (!strncmp(env, "AFL_SKIP_BIN_CHECK",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_skip_bin_check = get_afl_env(env) ? 1 : 0;
+
+          } else if (!strncmp(env, "AFL_DUMB_FORKSRV",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_dumb_forksrv = get_afl_env(env) ? 1 : 0;
+
+          } else if (!strncmp(env, "AFL_IMPORT_FIRST",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_import_first = get_afl_env(env) ? 1 : 0;
+
+          } else if (!strncmp(env, "AFL_CUSTOM_MUTATOR_ONLY",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_custom_mutator_only = get_afl_env(env) ? 1 : 0;
+
+          } else if (!strncmp(env, "AFL_NO_UI", afl_environment_variable_len)) {
+
+            afl->afl_env.afl_no_ui = get_afl_env(env) ? 1 : 0;
+
+          } else if (!strncmp(env, "AFL_FORCE_UI",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_force_ui = get_afl_env(env) ? 1 : 0;
+
+          } else if (!strncmp(env, "AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_i_dont_care_about_missing_crashes =
+                get_afl_env(env) ? 1 : 0;
+
+          } else if (!strncmp(env, "AFL_BENCH_JUST_ONE",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_bench_just_one = get_afl_env(env) ? 1 : 0;
+
+          } else if (!strncmp(env, "AFL_BENCH_UNTIL_CRASH",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_bench_until_crash = get_afl_env(env) ? 1 : 0;
+
+          } else if (!strncmp(env, "AFL_DEBUG_CHILD_OUTPUT",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_debug_child_output = get_afl_env(env) ? 1 : 0;
+
+          } else if (!strncmp(env, "AFL_AUTORESUME",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_autoresume = get_afl_env(env) ? 1 : 0;
+
+          } else if (!strncmp(env, "AFL_TMPDIR",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_tmpdir = (u8 *)get_afl_env(env);
+
+          } else if (!strncmp(env, "AFL_POST_LIBRARY",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_post_library = (u8 *)get_afl_env(env);
+
+          } else if (!strncmp(env, "AFL_CUSTOM_MUTATOR_LIBRARY",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_custom_mutator_library = (u8 *)get_afl_env(env);
+
+          } else if (!strncmp(env, "AFL_PYTHON_MODULE",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_python_module = (u8 *)get_afl_env(env);
+
+          } else if (!strncmp(env, "AFL_PATH", afl_environment_variable_len)) {
+
+            afl->afl_env.afl_path = (u8 *)get_afl_env(env);
+
+          } else if (!strncmp(env, "AFL_PRELOAD",
+
+                              afl_environment_variable_len)) {
+
+            afl->afl_env.afl_preload = (u8 *)get_afl_env(env);
+
+          }
+
+        } else
+
+          i++;
+
+      }
+
+      if (match == 0) {
+
+        WARNF("Mistyped AFL environment variable: %s", env);
+        found++;
+
+      }
+
+    }
+
+  }
+
+  if (found) sleep(2);
 
 }
 
