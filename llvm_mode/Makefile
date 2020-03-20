@@ -159,7 +159,7 @@ ifeq "$(shell uname)" "OpenBSD"
   CLANG_LFL += `$(LLVM_CONFIG) --libdir`/libLLVM.so
 endif
 
-ifeq "$(shell echo 'int main() {return 0; }' | $(CC) -x c - -fuse-ld=`which ld` -o .test 2>/dev/null && echo 1 || echo 0 ; rm -f .test )" "1"
+ifeq "$(shell echo 'int main() {return 0; }' | $(CC) -x c - -fuse-ld=`type ld | awk '{print $$NF}'` -o .test 2>/dev/null && echo 1 || echo 0 ; rm -f .test )" "1"
   CFLAGS += -DAFL_CLANG_FUSELD=1
 endif
 
@@ -220,13 +220,13 @@ test_deps:
 ifndef AFL_TRACE_PC
 	@echo "[*] Checking for working 'llvm-config'..."
  ifneq "$(LLVM_APPLE)" "1"
-	@which $(LLVM_CONFIG) >/dev/null 2>&1 || ( echo "[-] Oops, can't find 'llvm-config'. Install clang or set \$$LLVM_CONFIG or \$$PATH beforehand."; echo "    (Sometimes, the binary will be named llvm-config-3.5 or something like that.)"; exit 1 )
+	@type $(LLVM_CONFIG) >/dev/null 2>&1 || ( echo "[-] Oops, can't find 'llvm-config'. Install clang or set \$$LLVM_CONFIG or \$$PATH beforehand."; echo "    (Sometimes, the binary will be named llvm-config-3.5 or something like that.)"; exit 1 )
  endif
 else
 	@echo "[!] Note: using -fsanitize=trace-pc mode (this will fail with older LLVM)."
 endif
 	@echo "[*] Checking for working '$(CC)'..."
-	@which $(CC) >/dev/null 2>&1 || ( echo "[-] Oops, can't find '$(CC)'. Make sure that it's in your \$$PATH (or set \$$CC and \$$CXX)."; exit 1 )
+	@type $(CC) >/dev/null 2>&1 || ( echo "[-] Oops, can't find '$(CC)'. Make sure that it's in your \$$PATH (or set \$$CC and \$$CXX)."; exit 1 )
 	@echo "[*] Checking for matching versions of '$(CC)' and '$(LLVM_CONFIG)'"
 ifneq "$(CLANGVER)" "$(LLVMVER)"
 	@echo "[!] WARNING: we have llvm-config version $(LLVMVER) and a clang version $(CLANGVER)"
@@ -309,7 +309,7 @@ test_build: $(PROGS)
 	ASAN_OPTIONS=detect_leaks=0 ../afl-showmap -m none -q -o .test-instr0 ./test-instr < /dev/null
 	echo 1 | ASAN_OPTIONS=detect_leaks=0 ../afl-showmap -m none -q -o .test-instr1 ./test-instr
 	@rm -f test-instr
-	@cmp -s .test-instr0 .test-instr1; DR="$$?"; rm -f .test-instr0 .test-instr1; if [ "$$DR" = "0" ]; then echo; echo "Oops, the instrumentation does not seem to be behaving correctly!"; echo; echo "Please post to https://github.com/vanhauser-thc/AFLplusplus/issues to troubleshoot the issue."; echo; exit 1; fi
+	@cmp -s .test-instr0 .test-instr1; DR="$$?"; rm -f .test-instr0 .test-instr1; if [ "$$DR" = "0" ]; then echo; echo "Oops, the instrumentation does not seem to be behaving correctly!"; echo; echo "Please post to https://github.com/AFLplusplus/AFLplusplus/issues to troubleshoot the issue."; echo; exit 1; fi
 	@echo "[+] All right, the instrumentation seems to be working!"
 
 all_done: test_build
@@ -332,7 +332,7 @@ vpath  % ..
 	@echo >> ../$@
 	@echo .SH AUTHOR >> ../$@
 	@echo "afl++ was written by Michal \"lcamtuf\" Zalewski and is maintained by Marc \"van Hauser\" Heuse <mh@mh-sec.de>, Heiko \"hexcoder-\" Eissfeldt <heiko.eissfeldt@hexco.de> and Andrea Fioraldi <andreafioraldi@gmail.com>" >> ../$@
-	@echo  The homepage of afl++ is: https://github.com/vanhauser-thc/AFLplusplus >> ../$@
+	@echo  The homepage of afl++ is: https://github.com/AFLplusplus/AFLplusplus >> ../$@
 	@echo >> ../$@
 	@echo .SH LICENSE >> ../$@
 	@echo Apache License Version 2.0, January 2004 >> ../$@

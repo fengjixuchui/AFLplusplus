@@ -21,8 +21,10 @@
 #
 
 PREFIX      ?= /usr/local
-HELPER_PATH  = $(PREFIX)/lib/afl
-BIN_PATH     = $(PREFIX)/bin
+HELPER_PATH ?= $(PREFIX)/lib/afl
+BIN_PATH    ?= $(PREFIX)/bin
+DOC_PATH    ?= $(PREFIX)/share/doc/afl
+MAN_PATH    ?= $(PREFIX)/man/man8
 
 VERSION     = $(shell grep '^$(HASH)define VERSION ' ../config.h | cut -d '"' -f2)
 
@@ -42,7 +44,7 @@ PLUGIN_FLAGS = -fPIC -fno-rtti -I"$(shell $(CC) -print-file-name=plugin)/include
 HASH=\#
 
 GCCVER    = $(shell $(CC) --version 2>/dev/null | awk 'NR == 1 {print $$NF}')
-GCCBINDIR = $(shell dirname `which $(CC)` 2>/dev/null )
+GCCBINDIR = $(shell dirname `type $(CC) | awk '{print $$NF}'` 2>/dev/null )
 
 ifeq "$(shell echo '$(HASH)include <sys/ipc.h>@$(HASH)include <sys/shm.h>@int main() { int _id = shmget(IPC_PRIVATE, 65536, IPC_CREAT | IPC_EXCL | 0600); shmctl(_id, IPC_RMID, 0); return 0;}' | tr @ '\n' | $(CC) -x c - -o .test2 2>/dev/null && echo 1 || echo 0 ; rm -f .test2 )" "1"
 	SHMAT_OK=1
@@ -79,7 +81,7 @@ endif
 
 test_deps:
 	@echo "[*] Checking for working '$(CC)'..."
-	@which $(CC) >/dev/null 2>&1 || ( echo "[-] Oops, can't find '$(CC)'. Make sure that it's in your \$$PATH (or set \$$CC and \$$CXX)."; exit 1 )
+	@type $(CC) >/dev/null 2>&1 || ( echo "[-] Oops, can't find '$(CC)'. Make sure that it's in your \$$PATH (or set \$$CC and \$$CXX)."; exit 1 )
 #	@echo "[*] Checking for gcc for plugin support..."
 #	@$(CC) -v 2>&1 | grep -q -- --enable-plugin || ( echo "[-] Oops, this gcc has not been configured with plugin support."; exit 1 )
 	@echo "[*] Checking for gcc plugin development header files..."
@@ -108,7 +110,7 @@ test_build: $(PROGS)
 	ASAN_OPTIONS=detect_leaks=0 ../afl-showmap -m none -q -o .test-instr0 ./test-instr </dev/null
 	echo 1 | ASAN_OPTIONS=detect_leaks=0 ../afl-showmap -m none -q -o .test-instr1 ./test-instr
 	@rm -f test-instr
-	@cmp -s .test-instr0 .test-instr1; DR="$$?"; rm -f .test-instr0 .test-instr1; if [ "$$DR" = "0" ]; then echo; echo "Oops, the instrumentation does not seem to be behaving correctly!"; echo; echo "Please post to https://github.com/vanhauser-thc/AFLplusplus/issues to troubleshoot the issue."; echo; exit 1; fi
+	@cmp -s .test-instr0 .test-instr1; DR="$$?"; rm -f .test-instr0 .test-instr1; if [ "$$DR" = "0" ]; then echo; echo "Oops, the instrumentation does not seem to be behaving correctly!"; echo; echo "Please post to https://github.com/AFLplusplus/AFLplusplus/issues to troubleshoot the issue."; echo; exit 1; fi
 	@echo "[+] All right, the instrumentation seems to be working!"
 
 all_done: test_build
@@ -131,11 +133,17 @@ vpath  % ..
 	@echo >> ../$@
 	@echo .SH AUTHOR >> ../$@
 	@echo "afl++ was written by Michal \"lcamtuf\" Zalewski and is maintained by Marc \"van Hauser\" Heuse <mh@mh-sec.de>, Heiko \"hexcoder-\" Eissfeldt <heiko.eissfeldt@hexco.de> and Andrea Fioraldi <andreafioraldi@gmail.com>" >> ../$@
-	@echo  The homepage of afl++ is: https://github.com/vanhauser-thc/AFLplusplus >> ../$@
+	@echo  The homepage of afl++ is: https://github.com/AFLplusplus/AFLplusplus >> ../$@
 	@echo >> ../$@
 	@echo .SH LICENSE >> ../$@
 	@echo Apache License Version 2.0, January 2004 >> ../$@
 	ln -sf afl-gcc-fast.8 ../afl-g++-fast.8
+
+install: all
+	install -m 755 ../afl-gcc-fast $${DESTDIR}$(BIN_PATH)
+	install -m 755 ../afl-gcc-pass.so ../afl-gcc-rt.o $${DESTDIR}$(HELPER_PATH)
+	install -m 644 -T README.md $${DESTDIR}$(DOC_PATH)/README.gcc_plugin.md
+	install -m 644 -T README.whitelist.md $${DESTDIR}$(DOC_PATH)/README.gcc_plugin_whitelist.md
 
 clean:
 	rm -f *.o *.so *~ a.out core core.[1-9][0-9]* test-instr .test-instr0 .test-instr1 .test2

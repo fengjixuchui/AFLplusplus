@@ -2,9 +2,9 @@
 
   <img align="right" src="https://raw.githubusercontent.com/andreafioraldi/AFLplusplus-website/master/static/logo_256x256.png" alt="AFL++ Logo">
 
-  ![Travis State](https://api.travis-ci.com/vanhauser-thc/AFLplusplus.svg?branch=master)
+  ![Travis State](https://api.travis-ci.com/AFLplusplus/AFLplusplus.svg?branch=master)
 
-  Release Version: 2.62c
+  Release Version: [2.62c](https://github.com/AFLplusplus/AFLplusplus/releases)
 
   Github Version: 2.62d
 
@@ -12,7 +12,7 @@
 
   Originally developed by Michal "lcamtuf" Zalewski.
 
-  Repository: [https://github.com/vanhauser-thc/AFLplusplus](https://github.com/vanhauser-thc/AFLplusplus)
+  Repository: [https://github.com/AFLplusplus/AFLplusplus](https://github.com/AFLplusplus/AFLplusplus)
 
   afl++ is maintained by:
     * Marc "van Hauser" Heuse <mh@mh-sec.de>,
@@ -23,6 +23,18 @@
   Note that although afl now has a Google afl repository [https://github.com/Google/afl](https://github.com/Google/afl),
   it is unlikely to receive any noteable enhancements: [https://twitter.com/Dor3s/status/1154737061787660288](https://twitter.com/Dor3s/status/1154737061787660288)
 
+## Branches
+
+  The following branches exist:
+
+  * [master/trunk](https://github.com/AFLplusplus/AFLplusplus/) : stable state of afl++ - it is synced from dev from time to
+    time when we are satisfied with it's stability
+  * [dev](https://github.com/AFLplusplus/AFLplusplus/tree/dev) : development state of afl++ - bleeding edge and you might catch a
+    checkout which does not compile or has a bug. *We only accept PRs in dev!!*
+  * (any other) : experimental branches to work on specific features or testing
+    new functionality or changes
+
+  For releases, please see the [Releases](https://github.com/AFLplusplus/AFLplusplus/releases) tab.
 
 ## The enhancements compared to the original stock afl
 
@@ -88,7 +100,7 @@
   So all in all this is the best-of afl that is currently out there :-)
 
   For new versions and additional information, check out:
-  [https://github.com/vanhauser-thc/AFLplusplus](https://github.com/vanhauser-thc/AFLplusplus)
+  [https://github.com/AFLplusplus/AFLplusplus](https://github.com/AFLplusplus/AFLplusplus)
 
   To compare notes with other users or get notified about major new features,
   send a mail to <afl-users+subscribe@googlegroups.com>.
@@ -353,14 +365,16 @@ The available schedules are:
  - quad
  - lin
  - exploit
+ - mmopt
 
 In parallel mode (-M/-S, several instances with shared queue), we suggest to
-run the master using the exploit schedule (-p exploit) and the slaves with a
-combination of cut-off-exponential (-p coe), exponential (-p fast; default),
-and explore (-p explore) schedules.
+run the master using the explore or fast schedule (-p explore) and the slaves
+with a combination of cut-off-exponential (-p coe), exponential (-p fast),
+explore (-p explore) and mmopt (-p mmopt) schedules. If a schedule does
+not perform well for a target, restart the slave with a different schedule.
 
-In single mode, using -p fast is usually more beneficial than the default
-explore mode.
+In single mode, using -p fast is usually slightly more beneficial than the
+default explore mode.
 (We don't want to change the default behaviour of afl, so "fast" has not been
 made the default mode).
 
@@ -728,7 +742,7 @@ Thank you!
 ## 18) Contact
 
 Questions? Concerns? Bug reports? The contributors can be reached via
-[https://github.com/vanhauser-thc/AFLplusplus](https://github.com/vanhauser-thc/AFLplusplus)
+[https://github.com/AFLplusplus/AFLplusplus](https://github.com/AFLplusplus/AFLplusplus)
 
 There is also a mailing list for the afl project; to join, send a mail to
 <afl-users+subscribe@googlegroups.com>. Or, if you prefer to browse

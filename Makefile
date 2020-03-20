@@ -71,8 +71,8 @@ override CFLAGS     += -Wall -g -Wno-pointer-sign -I include/ \
 
 AFL_FUZZ_FILES = $(wildcard src/afl-fuzz*.c)
 
-ifneq "$(shell which python3m 2>/dev/null)" ""
-  ifneq "$(shell which python3m-config 2>/dev/null)" ""
+ifneq "$(shell type python3m 2>/dev/null)" ""
+  ifneq "$(shell type python3m-config 2>/dev/null)" ""
     PYTHON_INCLUDE  ?= $(shell python3m-config --includes)
     PYTHON_VERSION  ?= $(strip $(shell python3m --version 2>&1))
     # Starting with python3.8, we need to pass the `embed` flag. Earier versions didn't know this flag.
@@ -84,8 +84,8 @@ ifneq "$(shell which python3m 2>/dev/null)" ""
   endif
 endif
 
-ifneq "$(shell which python3 2>/dev/null)" ""
-  ifneq "$(shell which python3-config 2>/dev/null)" ""
+ifneq "$(shell type python3 2>/dev/null)" ""
+  ifneq "$(shell type python3-config 2>/dev/null)" ""
     PYTHON_INCLUDE  ?= $(shell python3-config --includes)
     PYTHON_VERSION  ?= $(strip $(shell python3 --version 2>&1))
     # Starting with python3.8, we need to pass the `embed` flag. Earier versions didn't know this flag.
@@ -97,8 +97,8 @@ ifneq "$(shell which python3 2>/dev/null)" ""
   endif
 endif
 
-ifneq "$(shell which python 2>/dev/null)" ""
-  ifneq "$(shell which python-config 2>/dev/null)" ""
+ifneq "$(shell type python 2>/dev/null)" ""
+  ifneq "$(shell type python-config 2>/dev/null)" ""
     PYTHON_INCLUDE  ?= $(shell python-config --includes)
     PYTHON_LIB      ?= $(shell python-config --ldflags)
     PYTHON_VERSION  ?= $(strip $(shell python --version 2>&1))
@@ -216,7 +216,7 @@ ifndef AFL_NO_X86
 
 test_x86:
 	@echo "[*] Checking for the default compiler cc..."
-	@which $(CC) >/dev/null || ( echo; echo "Oops, looks like there is no compiler '"$(CC)"' in your path."; echo; echo "Don't panic! You can restart with '"$(_)" CC=<yourCcompiler>'."; echo; exit 1 )
+	@type $(CC) >/dev/null || ( echo; echo "Oops, looks like there is no compiler '"$(CC)"' in your path."; echo; echo "Don't panic! You can restart with '"$(_)" CC=<yourCcompiler>'."; echo; exit 1 )
 	@echo "[*] Checking for the ability to compile x86 code..."
 	@echo 'main() { __asm__("xorb %al, %al"); }' | $(CC) -w -x c - -o .test1 || ( echo; echo "Oops, looks like your compiler can't generate x86 code."; echo; echo "Don't panic! You can use the LLVM or QEMU mode, but see docs/INSTALL first."; echo "(To ignore this error, set AFL_NO_X86=1 and try again.)"; echo; exit 1 )
 	@rm -f .test1
@@ -336,7 +336,7 @@ test_build: afl-gcc afl-as afl-showmap
 	ASAN_OPTIONS=detect_leaks=0 ./afl-showmap -m none -q -o .test-instr0 ./test-instr < /dev/null
 	echo 1 | ASAN_OPTIONS=detect_leaks=0 ./afl-showmap -m none -q -o .test-instr1 ./test-instr
 	@rm -f test-instr
-	@cmp -s .test-instr0 .test-instr1; DR="$$?"; rm -f .test-instr0 .test-instr1; if [ "$$DR" = "0" ]; then echo; echo "Oops, the instrumentation does not seem to be behaving correctly!"; echo; echo "Please post to https://github.com/vanhauser-thc/AFLplusplus/issues to troubleshoot the issue."; echo; exit 1; fi
+	@cmp -s .test-instr0 .test-instr1; DR="$$?"; rm -f .test-instr0 .test-instr1; if [ "$$DR" = "0" ]; then echo; echo "Oops, the instrumentation does not seem to be behaving correctly!"; echo; echo "Please post to https://github.com/AFLplusplus/AFLplusplus/issues to troubleshoot the issue."; echo; exit 1; fi
 	@echo "[+] All right, the instrumentation seems to be working!"
 
 else
@@ -348,7 +348,7 @@ endif
 
 
 all_done: test_build
-	@if [ ! "`which clang 2>/dev/null`" = "" ]; then echo "[+] LLVM users: see llvm_mode/README.md for a faster alternative to afl-gcc."; fi
+	@if [ ! "`type clang 2>/dev/null`" = "" ]; then echo "[+] LLVM users: see llvm_mode/README.md for a faster alternative to afl-gcc."; fi
 	@echo "[+] All done! Be sure to review the README.md - it's pretty short and useful."
 	@if [ "`uname`" = "Darwin" ]; then printf "\nWARNING: Fuzzing on MacOS X is slow because of the unusually high overhead of\nfork() on this OS. Consider using Linux or *BSD. You can also use VirtualBox\n(virtualbox.org) to put AFL inside a Linux or *BSD VM.\n\n"; fi
 	@! tty <&1 >/dev/null || printf "\033[0;30mNOTE: If you can read this, your terminal probably uses white background.\nThis will make the UI hard to read. See docs/status_screen.md for advice.\033[0m\n" 2>/dev/null
@@ -407,7 +407,7 @@ source-only: all radamsa
 	@echo >> $@
 	@echo .SH AUTHOR >> $@
 	@echo "afl++ was written by Michal \"lcamtuf\" Zalewski and is maintained by Marc \"van Hauser\" Heuse <mh@mh-sec.de>, Heiko \"hexcoder-\" Eissfeldt <heiko.eissfeldt@hexco.de> and Andrea Fioraldi <andreafioraldi@gmail.com>" >> $@
-	@echo  The homepage of afl++ is: https://github.com/vanhauser-thc/AFLplusplus >> $@
+	@echo  The homepage of afl++ is: https://github.com/AFLplusplus/AFLplusplus >> $@
 	@echo >> $@
 	@echo .SH LICENSE >> $@
 	@echo Apache License Version 2.0, January 2004 >> $@
@@ -430,6 +430,7 @@ endif
 	if [ -f compare-transform-pass.so ]; then set -e; install -m 755 compare-transform-pass.so $${DESTDIR}$(HELPER_PATH); fi
 	if [ -f split-compares-pass.so ]; then set -e; install -m 755 split-compares-pass.so $${DESTDIR}$(HELPER_PATH); fi
 	if [ -f split-switches-pass.so ]; then set -e; install -m 755 split-switches-pass.so $${DESTDIR}$(HELPER_PATH); fi
+	if [ -f cmplog-instructions-pass.so ]; then set -e; install -m 755 cmplog-*-pass.so $${DESTDIR}$(HELPER_PATH); fi
 	if [ -f libdislocator.so ]; then set -e; install -m 755 libdislocator.so $${DESTDIR}$(HELPER_PATH); fi
 	if [ -f libtokencap.so ]; then set -e; install -m 755 libtokencap.so $${DESTDIR}$(HELPER_PATH); fi
 	if [ -f libcompcov.so ]; then set -e; install -m 755 libcompcov.so $${DESTDIR}$(HELPER_PATH); fi
