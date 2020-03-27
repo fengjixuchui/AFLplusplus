@@ -214,16 +214,22 @@ void write_to_testcase(afl_state_t *afl, void *mem, u32 len) {
 
     lseek(fd, 0, SEEK_SET);
 
-  if (afl->mutator && afl->mutator->afl_custom_pre_save) {
+  if (unlikely(afl->mutator && afl->mutator->afl_custom_pre_save)) {
 
-    u8 *   new_data;
-    size_t new_size =
-        afl->mutator->afl_custom_pre_save(afl, mem, len, &new_data);
-    ck_write(fd, new_data, new_size, afl->fsrv.out_file);
-    ck_free(new_data);
+    u8 *new_buf = NULL;
+
+    size_t new_size = afl->mutator->afl_custom_pre_save(afl->mutator->data, mem,
+                                                        len, &new_buf);
+
+    if (unlikely(new_size <= 0 || !new_buf))
+      FATAL("Custom_pre_save failed (ret: %ld)", new_size);
+
+    /* everything as planned. use the new data. */
+    ck_write(fd, new_buf, new_size, afl->fsrv.out_file);
 
   } else {
 
+    /* boring uncustom. */
     ck_write(fd, mem, len, afl->fsrv.out_file);
 
   }
@@ -505,8 +511,8 @@ void sync_fuzzers(afl_state_t *afl) {
     afl->stage_cur = 0;
     afl->stage_max = 0;
 
-    /* For every file queued by this fuzzer, parse ID and see if we have looked
-       at it before; exec a test case if not. */
+    /* For every file queued by this fuzzer, parse ID and see if we have
+       looked at it before; exec a test case if not. */
 
     while ((qd_ent = readdir(qd))) {
 
@@ -627,8 +633,8 @@ u8 trim_case(afl_state_t *afl, struct queue_entry *q, u8 *in_buf) {
     u32 remove_pos = remove_len;
 
     sprintf(afl->stage_name_buf, "trim %s/%s",
-             u_stringify_int(val_bufs[0], remove_len),
-             u_stringify_int(val_bufs[1], remove_len));
+            u_stringify_int(val_bufs[0], remove_len),
+            u_stringify_int(val_bufs[1], remove_len));
 
     afl->stage_cur = 0;
     afl->stage_max = q->len / remove_len;
@@ -645,7 +651,8 @@ u8 trim_case(afl_state_t *afl, struct queue_entry *q, u8 *in_buf) {
 
       if (afl->stop_soon || fault == FAULT_ERROR) goto abort_trimming;
 
-      /* Note that we don't keep track of crashes or hangs here; maybe TODO? */
+      /* Note that we don't keep track of crashes or hangs here; maybe TODO?
+       */
 
       cksum = hash32(afl->fsrv.trace_bits, MAP_SIZE, HASH_CONST);
 

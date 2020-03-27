@@ -290,8 +290,11 @@ typedef struct py_mutator {
 
   PyObject *py_module;
   PyObject *py_functions[PY_FUNC_COUNT];
-  void *afl_state;
-  void *py_data;
+  void *    afl_state;
+  void *    py_data;
+
+  u8 *   pre_save_buf;
+  size_t pre_save_size;
 
 } py_mutator_t;
 
@@ -591,8 +594,10 @@ struct custom_mutator {
 
   const char *name;
   void *      dh;
+  u8 *        pre_save_buf;
+  size_t      pre_save_size;
 
-  void *data;    /* custom mutator data ptr */
+  void *data;                                    /* custom mutator data ptr */
 
   /* hooks for the custom mutator function */
 
@@ -620,8 +625,8 @@ struct custom_mutator {
    * not produce data larger than max_size.
    * @return Size of the mutated output.
    */
-  size_t (*afl_custom_fuzz)(void *data, u8 **buf, size_t buf_size,
-                            u8 *add_buf, size_t add_buf_size, size_t max_size);
+  size_t (*afl_custom_fuzz)(void *data, u8 **buf, size_t buf_size, u8 *add_buf,
+                            size_t add_buf_size, size_t max_size);
 
   /**
    * A post-processing function to use right before AFL writes the test case to
@@ -633,10 +638,10 @@ struct custom_mutator {
    * @param[in] data pointer returned in afl_custom_init for this fuzz case
    * @param[in] buf Buffer containing the test case to be executed
    * @param[in] buf_size Size of the test case
-   * @param[out] out_buf Pointer to the buffer of storing the test case after
-   *     processing. External library should allocate memory for out_buf. AFL++
-   *     will release the memory after saving the test case.
-   * @return Size of the output buffer after processing
+   * @param[out] out_buf Pointer to the buffer storing the test case after
+   *     processing. External library should allocate memory for out_buf.
+   *     It can chose to alter buf in-place, if the space is large enough.
+   * @return Size of the output buffer.
    */
   size_t (*afl_custom_pre_save)(void *data, u8 *buf, size_t buf_size,
                                 u8 **out_buf);
@@ -711,8 +716,8 @@ struct custom_mutator {
    *     not produce data larger than max_size.
    * @return Size of the mutated output.
    */
-  size_t (*afl_custom_havoc_mutation)(void *data, u8 **buf,
-                                      size_t buf_size, size_t max_size);
+  size_t (*afl_custom_havoc_mutation)(void *data, u8 **buf, size_t buf_size,
+                                      size_t max_size);
 
   /**
    * Return the probability (in percentage) that afl_custom_havoc_mutation
@@ -748,9 +753,8 @@ struct custom_mutator {
    * @param filename_orig_queue File name of the original queue entry. This
    *     argument can be NULL while initializing the fuzzer
    */
-  void (*afl_custom_queue_new_entry)(void *data,
-                                     const u8 *   filename_new_queue,
-                                     const u8 *   filename_orig_queue);
+  void (*afl_custom_queue_new_entry)(void *data, const u8 *filename_new_queue,
+                                     const u8 *filename_orig_queue);
   /**
    * Deinitialize the custom mutator.
    *
