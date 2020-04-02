@@ -134,9 +134,9 @@ ifeq "$(AFL_REAL_LD)" ""
 endif
 endif
 
-CFLAGS          ?= -O3 -funroll-loops
+CFLAGS          ?= -O3 -funroll-loops -D_FORTIFY_SOURCE=2
 override CFLAGS = -Wall \
-               -D_FORTIFY_SOURCE=2 -g -Wno-pointer-sign -I ../include/ \
+               -g -Wno-pointer-sign -I ../include/ \
                -DAFL_PATH=\"$(HELPER_PATH)\" -DBIN_PATH=\"$(BIN_PATH)\" \
                -DLLVM_BINDIR=\"$(LLVM_BINDIR)\" -DVERSION=\"$(VERSION)\" \
                -DLLVM_VERSION=\"$(LLVMVER)\"  -DAFL_CLANG_FLTO=\"$(AFL_CLANG_FLTO)\" \
@@ -145,8 +145,8 @@ ifdef AFL_TRACE_PC
   CFLAGS    += -DUSE_TRACE_PC=1
 endif
 
-CXXFLAGS          ?= -O3 -funroll-loops
-override CXXFLAGS += -Wall -D_FORTIFY_SOURCE=2 -g -I ../include/ \
+CXXFLAGS          ?= -O3 -funroll-loops -D_FORTIFY_SOURCE=2
+override CXXFLAGS += -Wall -g -I ../include/ \
                      -DVERSION=\"$(VERSION)\" -Wno-variadic-macros
 
 CLANG_CFL    = `$(LLVM_CONFIG) --cxxflags` -Wl,-znodelete -fno-rtti -fpic $(CXXFLAGS)
@@ -200,6 +200,8 @@ ifeq "$(NO_BUILD)" "1"
 else
   TARGETS = test_shm test_deps $(PROGS) afl-clang-fast.8 test_build all_done
 endif
+
+LLVM_MIN_4_0_1 = $(shell awk 'function tonum(ver, a) {split(ver,a,"."); return a[1]*1000000+a[2]*1000+a[3]} BEGIN { exit tonum(ARGV[1]) >= tonum(ARGV[2]) }' $(LLVMVER) 4.0.1; echo $$?)
 
 all: $(TARGETS)
 
@@ -268,6 +270,9 @@ endif
 	-$(CXX) $(CLANG_CFL) -DLLVMInsTrim_EXPORTS -fno-rtti -fPIC -std=$(LLVM_STDCXX) -shared $< MarkNodes.cc -o $@ $(CLANG_LFL)
 
 ../afl-llvm-pass.so: afl-llvm-pass.so.cc | test_deps
+ifeq "$(LLVM_MIN_4_0_1)" "0"
+	$(info [!] N-gram branch coverage instrumentation is not available for llvm version $(LLVMVER))
+endif
 	$(CXX) $(CLANG_CFL) -DLLVMInsTrim_EXPORTS -fno-rtti -fPIC -std=$(LLVM_STDCXX) -shared $< -o $@ $(CLANG_LFL)
 
 ../afl-llvm-lto-whitelist.so: afl-llvm-lto-whitelist.so.cc
@@ -324,7 +329,7 @@ install: all
 	install -d -m 755 $${DESTDIR}$(BIN_PATH) $${DESTDIR}$(HELPER_PATH) $${DESTDIR}$(DOC_PATH) $${DESTDIR}$(MISC_PATH)
 ifndef AFL_TRACE_PC
 	if [ -f ../afl-clang-fast -a -f ../libLLVMInsTrim.so -a -f ../afl-llvm-rt.o ]; then set -e; install -m 755 ../afl-clang-fast $${DESTDIR}$(BIN_PATH); ln -sf afl-clang-fast $${DESTDIR}$(BIN_PATH)/afl-clang-fast++; install -m 755 ../libLLVMInsTrim.so ../afl-llvm-pass.so ../afl-llvm-rt.o $${DESTDIR}$(HELPER_PATH); fi
-	if [ -f ../afl-clang-lto -a -f ../afl-ld ]; then set -e; ln -sf afl-clang-fast $${DESTDIR}$(BIN_PATH)/afl-clang-lto; ln -sf afl-clang-fast $${DESTDIR}$(BIN_PATH)/afl-clang-lto++; install -m 755 ../afl-ld $${DESTDIR}$(HELPER_PATH); ln -sf afl-ld $${DESTDIR}$(HELPER_PATH)/ld; install -m 755 ../afl-llvm-lto-instrumentation.so $${DESTDIR}$(HELPER_PATH); install -m 755 ../afl-llvm-lto-whitelist.so $${DESTDIR}$(HELPER_PATH); fi
+	if [ -f afl-clang-lto -a -f afl-ld ]; then set -e; install -m 755 afl-clang-lto $${DESTDIR}$(BIN_PATH); ln -sf afl-clang-fast $${DESTDIR}$(BIN_PATH)/afl-clang-lto++; install -m 755 afl-ld $${DESTDIR}$(HELPER_PATH); ln -sf afl-ld $${DESTDIR}$(HELPER_PATH)/ld; install -m 755 afl-llvm-lto-instrumentation.so $${DESTDIR}$(HELPER_PATH); install -m 755 afl-llvm-lto-whitelist.so $${DESTDIR}$(HELPER_PATH); fi
 else
 	if [ -f ../afl-clang-fast -a -f ../afl-llvm-rt.o ]; then set -e; install -m 755 ../afl-clang-fast $${DESTDIR}$(BIN_PATH); ln -sf afl-clang-fast $${DESTDIR}$(BIN_PATH)/afl-clang-fast++; install -m 755 ../afl-llvm-rt.o $${DESTDIR}$(HELPER_PATH); fi
 endif

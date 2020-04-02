@@ -33,15 +33,15 @@ void write_stats_file(afl_state_t *afl, double bitmap_cvg, double stability,
   struct rusage rus;
 
   unsigned long long int cur_time = get_cur_time();
-  u8 *                   fn = alloc_printf("%s/fuzzer_stats", afl->out_dir);
+  u8                     fn[PATH_MAX];
   s32                    fd;
   FILE *                 f;
+
+  snprintf(fn, PATH_MAX, "%s/fuzzer_stats", afl->out_dir);
 
   fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
 
   if (fd < 0) PFATAL("Unable to create '%s'", fn);
-
-  ck_free(fn);
 
   f = fdopen(fd, "w");
 
@@ -95,7 +95,7 @@ void write_stats_file(afl_state_t *afl, double bitmap_cvg, double stability,
       "last_hang         : %llu\n"
       "execs_since_crash : %llu\n"
       "exec_timeout      : %u\n"
-      "slowest_exec_ms   : %llu\n"
+      "slowest_exec_ms   : %u\n"
       "peak_rss_mb       : %lu\n"
       "afl_banner        : %s\n"
       "afl_version       : " VERSION

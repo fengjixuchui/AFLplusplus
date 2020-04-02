@@ -3,13 +3,13 @@
 # -----------------------------
 #
 # Originally written by Michal Zalewski
-# 
+#
 # Copyright 2013, 2014, 2015, 2016, 2017 Google Inc. All rights reserved.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at:
-# 
+#
 #   http://www.apache.org/licenses/LICENSE-2.0
 #
 
@@ -36,20 +36,20 @@ SH_PROGS    = afl-plot afl-cmin afl-cmin.bash afl-whatsup afl-system-config
 MANPAGES=$(foreach p, $(PROGS) $(SH_PROGS), $(p).8) afl-as.8
 ASAN_OPTIONS=detect_leaks=0
 
-ifeq "$(shell echo 'int main() {return 0; }' | $(CC) -x c - -flto=full -o .test 2>/dev/null && echo 1 || echo 0 ; rm -f .test )" "1"
+ifeq "$(shell echo 'int main() {return 0; }' | $(CC) $(CFLAGS) -x c - -flto=full -o .test 2>/dev/null && echo 1 || echo 0 ; rm -f .test )" "1"
 	CFLAGS_FLTO ?= -flto=full
 else
- ifeq "$(shell echo 'int main() {return 0; }' | $(CC) -x c - -flto=thin -o .test 2>/dev/null && echo 1 || echo 0 ; rm -f .test )" "1"
+ ifeq "$(shell echo 'int main() {return 0; }' | $(CC) $(CFLAGS) -x c - -flto=thin -o .test 2>/dev/null && echo 1 || echo 0 ; rm -f .test )" "1"
 	CFLAGS_FLTO ?= -flto=thin
  else
-  ifeq "$(shell echo 'int main() {return 0; }' | $(CC) -x c - -flto -o .test 2>/dev/null && echo 1 || echo 0 ; rm -f .test )" "1"
+  ifeq "$(shell echo 'int main() {return 0; }' | $(CC) $(CFLAGS) -x c - -flto -o .test 2>/dev/null && echo 1 || echo 0 ; rm -f .test )" "1"
 	CFLAGS_FLTO ?= -flto
   endif
  endif
 endif
 
 ifneq "$(shell uname)" "Darwin"
- ifeq "$(shell echo 'int main() {return 0; }' | $(CC) -x c - -march=native -o .test 2>/dev/null && echo 1 || echo 0 ; rm -f .test )" "1"
+ ifeq "$(shell echo 'int main() {return 0; }' | $(CC) $(CFLAGS) -x c - -march=native -o .test 2>/dev/null && echo 1 || echo 0 ; rm -f .test )" "1"
 	CFLAGS_OPT = -march=native
  endif
 endif
@@ -65,9 +65,9 @@ ifneq "$(shell uname -m)" "x86_64"
 endif
 
 CFLAGS     ?= -O3 -funroll-loops $(CFLAGS_OPT)
-override CFLAGS     += -Wall -g -Wno-pointer-sign -I include/ \
-              -DAFL_PATH=\"$(HELPER_PATH)\" -DBIN_PATH=\"$(BIN_PATH)\" \
-              -DDOC_PATH=\"$(DOC_PATH)\" -Wno-unused-function -fcommon
+override CFLAGS += -Wall -g -Wno-pointer-sign -D_FORTIFY_SOURCE=2 \
+			  -I include/ -Werror -DAFL_PATH=\"$(HELPER_PATH)\" \
+			  -DBIN_PATH=\"$(BIN_PATH)\" -DDOC_PATH=\"$(DOC_PATH)\"
 
 AFL_FUZZ_FILES = $(wildcard src/afl-fuzz*.c)
 
@@ -133,7 +133,7 @@ endif
 
 COMM_HDR    = include/alloc-inl.h include/config.h include/debug.h include/types.h
 
-ifeq "$(shell echo '$(HASH)include <Python.h>@int main() {return 0; }' | tr @ '\n' | $(CC) -x c - -o .test $(PYTHON_INCLUDE) $(LDFLAGS) $(PYTHON_LIB) 2>/dev/null && echo 1 || echo 0 ; rm -f .test )" "1"
+ifeq "$(shell echo '$(HASH)include <Python.h>@int main() {return 0; }' | tr @ '\n' | $(CC) $(CFLAGS) -x c - -o .test $(PYTHON_INCLUDE) $(LDFLAGS) $(PYTHON_LIB) 2>/dev/null && echo 1 || echo 0 ; rm -f .test )" "1"
 	PYTHON_OK=1
 	PYFLAGS=-DUSE_PYTHON $(PYTHON_INCLUDE) $(LDFLAGS) $(PYTHON_LIB) -DPYTHON_VERSION="\"$(PYTHON_VERSION)\""
 else
@@ -153,8 +153,8 @@ endif
 
 ifdef ASAN_BUILD
   $(info Compiling ASAN version of binaries)
-  CFLAGS+=-fsanitize=address
-  LDFLAGS+=-fsanitize=address
+  CFLAGS+=-fsanitize=address -fstack-protector-all
+  LDFLAGS+=-fsanitize=address -fstack-protector-all
 endif
 
 ifdef PROFILING
@@ -163,7 +163,7 @@ ifdef PROFILING
   LDFLAGS+=-pg
 endif
 
-ifeq "$(shell echo '$(HASH)include <sys/ipc.h>@$(HASH)include <sys/shm.h>@int main() { int _id = shmget(IPC_PRIVATE, 65536, IPC_CREAT | IPC_EXCL | 0600); shmctl(_id, IPC_RMID, 0); return 0;}' | tr @ '\n' | $(CC) -x c - -o .test2 2>/dev/null && echo 1 || echo 0 ; rm -f .test2 )" "1"
+ifeq "$(shell echo '$(HASH)include <sys/ipc.h>@$(HASH)include <sys/shm.h>@int main() { int _id = shmget(IPC_PRIVATE, 65536, IPC_CREAT | IPC_EXCL | 0600); shmctl(_id, IPC_RMID, 0); return 0;}' | tr @ '\n' | $(CC) $(CFLAGS) -x c - -o .test2 2>/dev/null && echo 1 || echo 0 ; rm -f .test2 )" "1"
 	SHMAT_OK=1
 else
 	SHMAT_OK=0
@@ -206,6 +206,7 @@ help:
 	@echo "clean: cleans everything. for qemu_mode it means it deletes all downloads as well"
 	@echo "code-format: format the code, do this before you commit and send a PR please!"
 	@echo "tests: this runs the test framework. It is more catered for the developers, but if you run into problems this helps pinpointing the problem"
+	@echo "unit: perform unit tests (based on cmocka)"
 	@echo "document: creates afl-fuzz-document which will only do one run and save all manipulated inputs into out/queue/mutations"
 	@echo "help: shows these build options :-)"
 	@echo "=========================================="
@@ -226,7 +227,7 @@ test_x86:
 	@echo "[*] Checking for the default compiler cc..."
 	@type $(CC) >/dev/null || ( echo; echo "Oops, looks like there is no compiler '"$(CC)"' in your path."; echo; echo "Don't panic! You can restart with '"$(_)" CC=<yourCcompiler>'."; echo; exit 1 )
 	@echo "[*] Checking for the ability to compile x86 code..."
-	@echo 'main() { __asm__("xorb %al, %al"); }' | $(CC) -w -x c - -o .test1 || ( echo; echo "Oops, looks like your compiler can't generate x86 code."; echo; echo "Don't panic! You can use the LLVM or QEMU mode, but see docs/INSTALL first."; echo "(To ignore this error, set AFL_NO_X86=1 and try again.)"; echo; exit 1 )
+	@echo 'main() { __asm__("xorb %al, %al"); }' | $(CC) $(CFLAGS) -w -x c - -o .test1 || ( echo; echo "Oops, looks like your compiler can't generate x86 code."; echo; echo "Don't panic! You can use the LLVM or QEMU mode, but see docs/INSTALL first."; echo "(To ignore this error, set AFL_NO_X86=1 and try again.)"; echo; exit 1 )
 	@rm -f .test1
 
 else
@@ -303,21 +304,33 @@ afl-tmin: src/afl-tmin.c src/afl-common.o src/afl-sharedmem.o src/afl-forkserver
 afl-analyze: src/afl-analyze.c src/afl-common.o src/afl-sharedmem.o $(COMM_HDR) | test_x86
 	$(CC) $(CFLAGS) $(CFLAGS_FLTO) src/$@.c src/afl-common.o src/afl-sharedmem.o -o $@ $(LDFLAGS)
 
-afl-gotcpu: src/afl-gotcpu.c $(COMM_HDR) | test_x86
-	$(CC) $(CFLAGS) src/$@.c -o $@ $(LDFLAGS)
+afl-gotcpu: src/afl-gotcpu.c src/afl-common.o $(COMM_HDR) | test_x86
+	$(CC) $(CFLAGS) src/$@.c src/afl-common.o -o $@ $(LDFLAGS)
 
 
 # document all mutations and only do one run (use with only one input file!)
 document: $(COMM_HDR) include/afl-fuzz.h $(AFL_FUZZ_FILES) src/afl-common.o src/afl-sharedmem.o src/afl-forkserver.o | test_x86
 	$(CC) -D_AFL_DOCUMENT_MUTATIONS $(CFLAGS) $(CFLAGS_FLTO) $(AFL_FUZZ_FILES) src/afl-common.o src/afl-sharedmem.o src/afl-forkserver.o -o afl-fuzz-document $(PYFLAGS) $(LDFLAGS)
 
+test/unittests/unit_maybe_alloc.o : $(COMM_HDR) include/alloc-inl.h test/unittests/unit_maybe_alloc.c $(AFL_FUZZ_FILES)
+	$(CC) $(CFLAGS) $(CFLAGS_FLTO) -c test/unittests/unit_maybe_alloc.c -o test/unittests/unit_maybe_alloc.o
 
+unit_maybe_alloc: test/unittests/unit_maybe_alloc.o
+	$(CC) $(CFLAGS) -Wl,--wrap=exit -Wl,--wrap=printf $(LDFLAGS) test/unittests/unit_maybe_alloc.o -o test/unittests/unit_maybe_alloc -ldl -lcmocka
+	./test/unittests/unit_maybe_alloc
+
+unit_preallocable: test/unittests/unit_preallocable.o
+	$(CC) $(CFLAGS) -Wl,--wrap=exit -Wl,--wrap=printf $(LDFLAGS) test/unittests/unit_preallocable.o -o test/unittests/unit_preallocable -ldl -lcmocka
+	./test/unittests/unit_preallocable
+
+
+unit: unit_maybe_alloc unit_preallocable
 
 code-format:
 	./.custom-format.py -i src/*.c
 	./.custom-format.py -i include/*.h
-	./.custom-format.py -i libdislocator/*.c 
-	./.custom-format.py -i libtokencap/*.c 
+	./.custom-format.py -i libdislocator/*.c
+	./.custom-format.py -i libtokencap/*.c
 	./.custom-format.py -i llvm_mode/*.c
 	./.custom-format.py -i llvm_mode/*.h
 	./.custom-format.py -i llvm_mode/*.cc
@@ -364,7 +377,7 @@ all_done: test_build
 .NOTPARALLEL: clean
 
 clean:
-	rm -f $(PROGS) libradamsa.so afl-fuzz-document afl-as as afl-g++ afl-clang afl-clang++ *.o src/*.o *~ a.out core core.[1-9][0-9]* *.stackdump .test .test1 .test2 test-instr .test-instr0 .test-instr1 qemu_mode/qemu-3.1.1.tar.xz afl-qemu-trace afl-gcc-fast afl-gcc-pass.so afl-gcc-rt.o afl-g++-fast ld *.so *.8
+	rm -f $(PROGS) libradamsa.so afl-fuzz-document afl-as as afl-g++ afl-clang afl-clang++ *.o src/*.o *~ a.out core core.[1-9][0-9]* *.stackdump .test .test1 .test2 test-instr .test-instr0 .test-instr1 qemu_mode/qemu-3.1.1.tar.xz afl-qemu-trace afl-gcc-fast afl-gcc-pass.so afl-gcc-rt.o afl-g++-fast ld *.so *.8 test/unittests/*.o test/unittests/unit_maybe_alloc test/unittests/preallocable
 	rm -rf out_dir qemu_mode/qemu-3.1.1 *.dSYM */*.dSYM
 	-$(MAKE) -C llvm_mode clean
 	-$(MAKE) -C gcc_plugin clean

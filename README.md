@@ -160,6 +160,7 @@ These build targets exist:
 * clean: cleans everything. for qemu_mode and unicorn_mode it means it deletes all downloads as well
 * code-format: format the code, do this before you commit and send a PR please!
 * tests: runs test cases to ensure that all features are still working as they should
+* unit: perform unit tests (based on cmocka)
 * help: shows these build options
 
 [Unless you are on Mac OS X](https://developer.apple.com/library/archive/qa/qa1118/_index.html) you can also build statically linked versions of the 
@@ -259,7 +260,7 @@ superior to blind fuzzing or coverage-only tools.
 ## Instrumenting programs for use with AFL
 
 PLEASE NOTE: llvm_mode compilation with afl-clang-fast/afl-clang-fast++
-instead of afl-gcc/afl-g++ is much faster and has a few cool features.
+instead of afl-gcc/afl-g++ is much faster and has many cool features.
 See llvm_mode/ - however few code does not compile with llvm.
 We support llvm versions 3.8.0 to 11.
 
