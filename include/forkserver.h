@@ -32,6 +32,7 @@
 #include <stdbool.h>
 
 #include "types.h"
+
 typedef struct afl_forkserver {
 
   /* a program that includes afl-forkserver needs to define these */
