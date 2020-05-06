@@ -189,9 +189,8 @@ ifdef STATIC
   # Disable python for static compilation to simplify things
   PYTHON_OK=0
   PYFLAGS=
-
-  CFLAGS += -static
-  LDFLAGS += -lm -lpthread -lz -lutil
+  COMPILE_STATIC = -static
+  LDFLAGS += -lm
 endif
 
 ASAN_CFLAGS=-fsanitize=address -fstack-protector-all -fno-omit-frame-pointer
@@ -307,7 +306,7 @@ test_python:
 else
 
 test_python:
-	@echo "[-] You seem to need to install the package python3-dev or python2-dev (and perhaps python[23]-apt), but it is optional so we continue"
+	@echo "[-] You seem to need to install the package python3-dev, python2-dev or python-dev (and perhaps python[23]-apt), but it is optional so we continue"
 
 endif
 
@@ -339,19 +338,19 @@ src/third_party/libradamsa/libradamsa.so: src/third_party/libradamsa/libradamsa.
 	$(MAKE) -C src/third_party/libradamsa/ CFLAGS="$(CFLAGS)"
 
 afl-fuzz: $(COMM_HDR) include/afl-fuzz.h $(AFL_FUZZ_FILES) src/afl-common.o src/afl-sharedmem.o src/afl-forkserver.o | test_x86
-	$(CC) $(CFLAGS) $(CFLAGS_FLTO) $(AFL_FUZZ_FILES) src/afl-common.o src/afl-sharedmem.o src/afl-forkserver.o -o $@ $(PYFLAGS) $(LDFLAGS)
+	$(CC) $(CFLAGS) $(COMPILE_STATIC) $(CFLAGS_FLTO) $(AFL_FUZZ_FILES) src/afl-common.o src/afl-sharedmem.o src/afl-forkserver.o -o $@ $(PYFLAGS) $(LDFLAGS)
 
 afl-showmap: src/afl-showmap.c src/afl-common.o src/afl-sharedmem.o src/afl-forkserver.o $(COMM_HDR) | test_x86
-	$(CC) $(CFLAGS) $(CFLAGS_FLTO) src/$@.c src/afl-common.o src/afl-sharedmem.o src/afl-forkserver.o -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) $(COMPILE_STATIC) $(CFLAGS_FLTO) src/$@.c src/afl-common.o src/afl-sharedmem.o src/afl-forkserver.o -o $@ $(LDFLAGS)
 
 afl-tmin: src/afl-tmin.c src/afl-common.o src/afl-sharedmem.o src/afl-forkserver.o $(COMM_HDR) | test_x86
-	$(CC) $(CFLAGS) $(CFLAGS_FLTO) src/$@.c src/afl-common.o src/afl-sharedmem.o src/afl-forkserver.o -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) $(COMPILE_STATIC) $(CFLAGS_FLTO) src/$@.c src/afl-common.o src/afl-sharedmem.o src/afl-forkserver.o -o $@ $(LDFLAGS)
 
 afl-analyze: src/afl-analyze.c src/afl-common.o src/afl-sharedmem.o $(COMM_HDR) | test_x86
-	$(CC) $(CFLAGS) $(CFLAGS_FLTO) src/$@.c src/afl-common.o src/afl-sharedmem.o -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) $(COMPILE_STATIC) $(CFLAGS_FLTO) src/$@.c src/afl-common.o src/afl-sharedmem.o -o $@ $(LDFLAGS)
 
 afl-gotcpu: src/afl-gotcpu.c src/afl-common.o $(COMM_HDR) | test_x86
-	$(CC) $(CFLAGS) $(CFLAGS_FLTO) src/$@.c src/afl-common.o -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) $(COMPILE_STATIC) $(CFLAGS_FLTO) src/$@.c src/afl-common.o -o $@ $(LDFLAGS)
 
 
 # document all mutations and only do one run (use with only one input file!)
@@ -445,6 +444,7 @@ clean:
 	-$(MAKE) -C gcc_plugin clean
 	$(MAKE) -C libdislocator clean
 	$(MAKE) -C libtokencap clean
+	$(MAKE) -C examples/afl_network_proxy clean
 	$(MAKE) -C examples/socket_fuzzing clean
 	$(MAKE) -C examples/argv_fuzzing clean
 	$(MAKE) -C qemu_mode/unsigaction clean
@@ -468,6 +468,7 @@ distrib: all radamsa
 	-$(MAKE) -C gcc_plugin
 	$(MAKE) -C libdislocator
 	$(MAKE) -C libtokencap
+	$(MAKE) -C examples/afl_network_proxy
 	$(MAKE) -C examples/socket_fuzzing
 	$(MAKE) -C examples/argv_fuzzing
 	cd qemu_mode && sh ./build_qemu_support.sh
@@ -476,6 +477,7 @@ distrib: all radamsa
 binary-only: all radamsa
 	$(MAKE) -C libdislocator
 	$(MAKE) -C libtokencap
+	$(MAKE) -C examples/afl_network_proxy
 	$(MAKE) -C examples/socket_fuzzing
 	$(MAKE) -C examples/argv_fuzzing
 	cd qemu_mode && sh ./build_qemu_support.sh
@@ -486,6 +488,9 @@ source-only: all radamsa
 	-$(MAKE) -C gcc_plugin
 	$(MAKE) -C libdislocator
 	$(MAKE) -C libtokencap
+	#$(MAKE) -C examples/afl_network_proxy
+	#$(MAKE) -C examples/socket_fuzzing
+	#$(MAKE) -C examples/argv_fuzzing
 
 %.8:	%
 	@echo .TH $* 8 $(BUILD_DATE) "afl++" > $@
@@ -521,6 +526,7 @@ install: all $(MANPAGES)
 	if [ -f afl-fuzz-document ]; then set -e; install -m 755 afl-fuzz-document $${DESTDIR}$(BIN_PATH); fi
 	if [ -f socketfuzz32.so -o -f socketfuzz64.so ]; then $(MAKE) -C examples/socket_fuzzing install; fi
 	if [ -f argvfuzz32.so -o -f argvfuzz64.so ]; then $(MAKE) -C examples/argv_fuzzing install; fi
+	if [ -f examples/afl_network_proxy/afl-network-server ]; then $(MAKE) -C examples/afl_network_proxy install; fi
 
 	set -e; ln -sf afl-gcc $${DESTDIR}$(BIN_PATH)/afl-g++
 	set -e; if [ -f afl-clang-fast ] ; then ln -sf afl-clang-fast $${DESTDIR}$(BIN_PATH)/afl-clang ; ln -sf afl-clang-fast $${DESTDIR}$(BIN_PATH)/afl-clang++ ; else ln -sf afl-gcc $${DESTDIR}$(BIN_PATH)/afl-clang ; ln -sf afl-gcc $${DESTDIR}$(BIN_PATH)/afl-clang++; fi
