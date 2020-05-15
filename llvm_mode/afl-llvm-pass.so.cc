@@ -54,11 +54,11 @@ typedef long double max_align_t;
 
 #if LLVM_VERSION_MAJOR > 3 || \
     (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR > 4)
-#include "llvm/IR/DebugInfo.h"
-#include "llvm/IR/CFG.h"
+  #include "llvm/IR/DebugInfo.h"
+  #include "llvm/IR/CFG.h"
 #else
-#include "llvm/DebugInfo.h"
-#include "llvm/Support/CFG.h"
+  #include "llvm/DebugInfo.h"
+  #include "llvm/Support/CFG.h"
 #endif
 
 #include "afl-llvm-common.h"
@@ -84,6 +84,7 @@ class AFLCoverage : public ModulePass {
   uint32_t ngram_size = 0;
   uint32_t debug = 0;
   uint32_t map_size = MAP_SIZE;
+  uint32_t function_minimum_size = 1;
   char *   ctx_str = NULL, *skip_nozero = NULL;
 
 };
@@ -114,7 +115,7 @@ uint64_t PowerOf2Ceil(unsigned in) {
 /* #if LLVM_VERSION_STRING >= "4.0.1" */
 #if LLVM_VERSION_MAJOR >= 4 || \
     (LLVM_VERSION_MAJOR == 4 && LLVM_VERSION_PATCH >= 1)
-#define AFL_HAVE_VECTOR_INTRINSICS 1
+  #define AFL_HAVE_VECTOR_INTRINSICS 1
 #endif
 bool AFLCoverage::runOnModule(Module &M) {
 
@@ -182,6 +183,10 @@ bool AFLCoverage::runOnModule(Module &M) {
 #endif
   skip_nozero = getenv("AFL_LLVM_SKIP_NEVERZERO");
 
+  if (getenv("AFL_LLVM_INSTRIM_SKIPSINGLEBLOCK") ||
+      getenv("AFL_LLVM_SKIPSINGLEBLOCK"))
+    function_minimum_size = 2;
+
   unsigned PrevLocSize = 0;
 
   char *ngram_size_str = getenv("AFL_LLVM_NGRAM_SIZE");
@@ -206,8 +211,15 @@ bool AFLCoverage::runOnModule(Module &M) {
   else
 #else
   if (ngram_size_str)
-    FATAL("Sorry, NGRAM branch coverage is not supported with llvm version %s!",
-          LLVM_VERSION_STRING);
+#ifndef LLVM_VERSION_PATCH
+    FATAL("Sorry, NGRAM branch coverage is not supported with llvm version %d.%d.%d!",
+          LLVM_VERSION_MAJOR, LLVM_VERSION_MINOR,
+          0);
+#else
+    FATAL("Sorry, NGRAM branch coverage is not supported with llvm version %d.%d.%d!",
+          LLVM_VERSION_MAJOR, LLVM_VERSION_MINOR,
+          LLVM_VERSION_PATCH);
+#endif
 #endif
     PrevLocSize = 1;
 
@@ -237,17 +249,17 @@ bool AFLCoverage::runOnModule(Module &M) {
 
 #ifdef AFL_HAVE_VECTOR_INTRINSICS
   if (ngram_size)
-#ifdef __ANDROID__
+  #ifdef __ANDROID__
     AFLPrevLoc = new GlobalVariable(
         M, PrevLocTy, /* isConstant */ false, GlobalValue::ExternalLinkage,
         /* Initializer */ nullptr, "__afl_prev_loc");
-#else
+  #else
     AFLPrevLoc = new GlobalVariable(
         M, PrevLocTy, /* isConstant */ false, GlobalValue::ExternalLinkage,
         /* Initializer */ nullptr, "__afl_prev_loc",
         /* InsertBefore */ nullptr, GlobalVariable::GeneralDynamicTLSModel,
         /* AddressSpace */ 0, /* IsExternallyInitialized */ false);
-#endif
+  #endif
   else
 #endif
 #ifdef __ANDROID__
@@ -294,13 +306,15 @@ bool AFLCoverage::runOnModule(Module &M) {
 
     if (!isInWhitelist(&F)) continue;
 
+    if (F.size() < function_minimum_size) continue;
+
     for (auto &BB : F) {
 
       BasicBlock::iterator IP = BB.getFirstInsertionPt();
       IRBuilder<>          IRB(&(*IP));
 
       // Context sensitive coverage
-      if (ctx_str && &BB == &F.getEntryBlock() && F.size() > 1) {
+      if (ctx_str && &BB == &F.getEntryBlock()) {
 
         // load the context ID of the previous function and write to to a local
         // variable on the stack
@@ -318,7 +332,7 @@ bool AFLCoverage::runOnModule(Module &M) {
             if ((callInst = dyn_cast<CallInst>(&IN))) {
 
               Function *Callee = callInst->getCalledFunction();
-              if (!Callee || Callee->size() < 2)
+              if (!Callee || Callee->size() < function_minimum_size)
                 continue;
               else {
 
@@ -389,11 +403,11 @@ bool AFLCoverage::runOnModule(Module &M) {
       }
 
       // fprintf(stderr, " == %d\n", more_than_one);
-      if (more_than_one != 1) {
+      if (F.size() > 1 && more_than_one != 1) {
 
         // in CTX mode we have to restore the original context for the caller -
         // she might be calling other functions which need the correct CTX
-        if (ctx_str && has_calls && F.size() > 1) {
+        if (ctx_str && has_calls) {
 
           Instruction *Inst = BB.getTerminator();
           if (isa<ReturnInst>(Inst) || isa<ResumeInst>(Inst)) {
@@ -526,7 +540,7 @@ bool AFLCoverage::runOnModule(Module &M) {
       // in CTX mode we have to restore the original context for the caller -
       // she might be calling other functions which need the correct CTX.
       // Currently this is only needed for the Ubuntu clang-6.0 bug
-      if (ctx_str && has_calls && F.size() > 1) {
+      if (ctx_str && has_calls) {
 
         Instruction *Inst = BB.getTerminator();
         if (isa<ReturnInst>(Inst) || isa<ResumeInst>(Inst)) {

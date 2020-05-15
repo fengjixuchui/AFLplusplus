@@ -30,7 +30,7 @@
 #define AFL_MAIN
 
 #ifdef __ANDROID__
-#include "android-ashmem.h"
+  #include "android-ashmem.h"
 #endif
 
 #include "config.h"
@@ -619,7 +619,7 @@ static void set_up_environment(afl_forkserver_t *fsrv) {
 
     }
 
-    out_file = alloc_printf("%s/.afl-tmin-temp-%u", use_dir, getpid());
+    out_file = alloc_printf("%s/.afl-tmin-temp-%u", use_dir, (u32)getpid());
 
   }
 

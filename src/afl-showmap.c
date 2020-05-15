@@ -32,7 +32,7 @@
 #define AFL_MAIN
 
 #ifdef __ANDROID__
-#include "android-ashmem.h"
+  #include "android-ashmem.h"
 #endif
 #include "config.h"
 #include "types.h"
@@ -865,7 +865,8 @@ int main(int argc, char **argv_orig, char **envp) {
 
     }
 
-    stdin_file = alloc_printf("%s/.afl-showmap-temp-%u", use_dir, getpid());
+    stdin_file =
+        alloc_printf("%s/.afl-showmap-temp-%u", use_dir, (u32)getpid());
     unlink(stdin_file);
     atexit(at_exit_handler);
     fsrv->out_fd = open(stdin_file, O_RDWR | O_CREAT | O_EXCL, 0600);

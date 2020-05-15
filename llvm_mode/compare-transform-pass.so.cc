@@ -25,7 +25,6 @@
 #include "llvm/Config/llvm-config.h"
 
 #include "llvm/ADT/Statistic.h"
-#include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
@@ -38,12 +37,12 @@
 
 #if LLVM_VERSION_MAJOR > 3 || \
     (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR > 4)
-#include "llvm/IR/Verifier.h"
-#include "llvm/IR/DebugInfo.h"
+  #include "llvm/IR/Verifier.h"
+  #include "llvm/IR/DebugInfo.h"
 #else
-#include "llvm/Analysis/Verifier.h"
-#include "llvm/DebugInfo.h"
-#define nullptr 0
+  #include "llvm/Analysis/Verifier.h"
+  #include "llvm/DebugInfo.h"
+  #define nullptr 0
 #endif
 
 #include <set>
@@ -506,7 +505,7 @@ bool CompareTransform::transformCmps(Module &M, const bool processStrcmp,
 
 bool CompareTransform::runOnModule(Module &M) {
 
-  if (isatty(2) && getenv("AFL_QUIET") == NULL)
+  if ((isatty(2) && getenv("AFL_QUIET") == NULL) || getenv("AFL_DEBUG") != NULL)
     llvm::errs() << "Running compare-transform-pass by laf.intel@gmail.com, "
                     "extended by heiko@hexco.de\n";
   else

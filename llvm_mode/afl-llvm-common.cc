@@ -33,7 +33,10 @@ char *getBBName(const llvm::BasicBlock *BB) {
   std::string        Str;
   raw_string_ostream OS(Str);
 
+#if LLVM_VERSION_MAJOR >= 4 || \
+    (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 7)
   BB->printAsOperand(OS, false);
+#endif
   name = strdup(OS.str().c_str());
   return name;
 
@@ -43,10 +46,29 @@ char *getBBName(const llvm::BasicBlock *BB) {
 /* Note: this blacklist check is also called in isInWhitelist() */
 bool isBlacklisted(const llvm::Function *F) {
 
+  // Starting from "LLVMFuzzer" these are functions used in libfuzzer based
+  // fuzzing campaign installations, e.g. oss-fuzz
+
   static const char *Blacklist[] = {
 
-      "asan.", "llvm.",      "sancov.", "__ubsan_handle_", "ign.", "__afl_",
-      "_fini", "__libc_csu", "__asan",  "__msan",          "msan."
+      "asan.",
+      "llvm.",
+      "sancov.",
+      "__ubsan_handle_",
+      "ign.",
+      "__afl_",
+      "_fini",
+      "__libc_csu",
+      "__asan",
+      "__msan",
+      "msan.",
+      "LLVMFuzzer",
+      "maybe_duplicate_stderr",
+      "discard_output",
+      "close_stdout",
+      "dup_and_close_stderr",
+      "maybe_close_fd_mask",
+      "ExecuteFilesOnyByOne"
 
   };
 
@@ -152,7 +174,7 @@ bool isInWhitelist(llvm::Function *F) {
 #else
   if (!Loc.isUnknown()) {
 
-    DILocation cDILoc(Loc.getAsMDNode(C));
+    DILocation cDILoc(Loc.getAsMDNode(F->getContext()));
 
     unsigned int instLine = cDILoc.getLineNumber();
     StringRef    instFilename = cDILoc.getFilename();
@@ -198,6 +220,23 @@ bool isInWhitelist(llvm::Function *F) {
 
   //
   return false;
+
+}
+
+// Calculate the number of average collisions that would occur if all
+// location IDs would be assigned randomly (like normal afl/afl++).
+// This uses the "balls in bins" algorithm.
+unsigned long long int calculateCollisions(uint32_t edges) {
+
+  double                 bins = MAP_SIZE;
+  double                 balls = edges;
+  double                 step1 = 1 - (1 / bins);
+  double                 step2 = pow(step1, balls);
+  double                 step3 = bins * step2;
+  double                 step4 = round(step3);
+  unsigned long long int empty = step4;
+  unsigned long long int collisions = edges - (MAP_SIZE - empty);
+  return collisions;
 
 }
 

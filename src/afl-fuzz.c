@@ -27,6 +27,10 @@
 #include "cmplog.h"
 #include <limits.h>
 
+#ifdef PROFILING
+extern u64 time_spent_working;
+#endif
+
 static u8 *get_libradamsa_path(u8 *own_loc) {
 
   u8 *tmp, *cp, *rsl, *own_copy;
@@ -183,7 +187,6 @@ static void usage(afl_state_t *afl, u8 *argv0, int more_help) {
       "AFL_NO_SNAPSHOT: do not use the snapshot feature (if the snapshot lkm is loaded)\n"
       "AFL_NO_UI: switch status screen off\n"
       "AFL_PATH: path to AFL support binaries\n"
-      "AFL_POST_LIBRARY: postprocess generated test cases before use as target input\n"
       "AFL_PYTHON_MODULE: mutate and trim inputs with the specified Python module\n"
       "AFL_QUIET: suppress forkserver status messages\n"
       "AFL_PRELOAD: LD_PRELOAD / DYLD_INSERT_LIBRARIES settings for target\n"
@@ -386,7 +389,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
         }
 
-        afl->force_deterministic = 1;
+        afl->is_master = 1;
 
       }
 
@@ -396,6 +399,9 @@ int main(int argc, char **argv_orig, char **envp) {
 
         if (afl->sync_id) { FATAL("Multiple -S or -M options not supported"); }
         afl->sync_id = ck_strdup(optarg);
+        afl->is_slave = 1;
+        afl->skip_deterministic = 1;
+        afl->use_splicing = 1;
         break;
 
       case 'f':                                              /* target file */
@@ -495,12 +501,6 @@ int main(int argc, char **argv_orig, char **envp) {
       break;
 
       case 'd':                                       /* skip deterministic */
-
-        if (afl->skip_deterministic) {
-
-          FATAL("Multiple -d options not supported");
-
-        }
 
         afl->skip_deterministic = 1;
         afl->use_splicing = 1;
@@ -644,10 +644,7 @@ int main(int argc, char **argv_orig, char **envp) {
         }
 
         afl->limit_time_puppet = limit_time_puppet2;
-
-        SAYF("limit_time_puppet %d\n", afl->limit_time_puppet);
         afl->swarm_now = 0;
-
         if (afl->limit_time_puppet == 0) { afl->key_puppet = 1; }
 
         int i;
@@ -793,8 +790,7 @@ int main(int argc, char **argv_orig, char **envp) {
   OKF("afl-tmin fork server patch from github.com/nccgroup/TriforceAFL");
   OKF("MOpt Mutator from github.com/puppet-meteor/MOpt-AFL");
 
-  if (afl->sync_id && afl->force_deterministic &&
-      afl->afl_env.afl_custom_mutator_only) {
+  if (afl->sync_id && afl->is_master && afl->afl_env.afl_custom_mutator_only) {
 
     WARNF(
         "Using -M master with the AFL_CUSTOM_MUTATOR_ONLY mutator options will "
@@ -852,7 +848,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
-#if defined(__SANITIZE_ADDRESS__)
+  #if defined(__SANITIZE_ADDRESS__)
   if (afl->fsrv.mem_limit) {
 
     WARNF("in the ASAN build we disable all memory limits");
@@ -860,7 +856,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
-#endif
+  #endif
 
   setup_signal_handlers();
   check_asan_opts();
@@ -1053,17 +1049,15 @@ int main(int argc, char **argv_orig, char **envp) {
 
   get_core_count(afl);
 
-#ifdef HAVE_AFFINITY
+  #ifdef HAVE_AFFINITY
   bind_to_free_cpu(afl);
-#endif                                                     /* HAVE_AFFINITY */
+  #endif                                                   /* HAVE_AFFINITY */
 
   check_crash_handling();
   check_cpu_governor(afl);
 
   afl->fsrv.trace_bits =
       afl_shm_init(&afl->shm, afl->fsrv.map_size, afl->dumb_mode);
-
-  setup_post(afl);
 
   if (!afl->in_bitmap) { memset(afl->virgin_bits, 255, afl->fsrv.map_size); }
   memset(afl->virgin_tmout, 255, afl->fsrv.map_size);
@@ -1073,7 +1067,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   setup_dirs_fds(afl);
 
-  setup_custom_mutator(afl);
+  setup_custom_mutators(afl);
 
   setup_cmdline_file(afl, argv + optind);
 
@@ -1351,10 +1345,17 @@ stop_fuzzing:
 
   }
 
+  #ifdef PROFILING
+  SAYF(cYEL "[!] " cRST
+            "Profiling information: %llu ms total work, %llu ns/run\n",
+       time_spent_working / 1000000,
+       time_spent_working / afl->fsrv.total_execs);
+  #endif
+
   fclose(afl->fsrv.plot_file);
   destroy_queue(afl);
   destroy_extras(afl);
-  destroy_custom_mutator(afl);
+  destroy_custom_mutators(afl);
   afl_shm_deinit(&afl->shm);
   afl_fsrv_deinit(&afl->fsrv);
   if (afl->orig_cmdline) { ck_free(afl->orig_cmdline); }

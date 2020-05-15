@@ -30,13 +30,37 @@
 
 #include "cmplog.h"
 
+#ifdef PROFILING
+u64 time_spent_working = 0;
+#endif
+
 /* Execute target application, monitoring for timeouts. Return status
    information. The called program will update afl->fsrv->trace_bits. */
 
 fsrv_run_result_t fuzz_run_target(afl_state_t *afl, afl_forkserver_t *fsrv,
                                   u32 timeout) {
 
+#ifdef PROFILING
+  static u64      time_spent_start = 0;
+  struct timespec spec;
+  if (time_spent_start) {
+
+    u64 current;
+    clock_gettime(CLOCK_REALTIME, &spec);
+    current = (spec.tv_sec * 1000000000) + spec.tv_nsec;
+    time_spent_working += (current - time_spent_start);
+
+  }
+
+#endif
+
   fsrv_run_result_t res = afl_fsrv_run_target(fsrv, timeout, &afl->stop_soon);
+
+#ifdef PROFILING
+  clock_gettime(CLOCK_REALTIME, &spec);
+  time_spent_start = (spec.tv_sec * 1000000000) + spec.tv_nsec;
+#endif
+
   // TODO: Don't classify for faults?
   classify_counts(fsrv);
   return res;
@@ -65,21 +89,40 @@ void write_to_testcase(afl_state_t *afl, void *mem, u32 len) {
 
 #endif
 
-  if (unlikely(afl->mutator && afl->mutator->afl_custom_pre_save)) {
+  if (unlikely(afl->custom_mutators_count)) {
 
-    u8 *new_buf = NULL;
+    u8 *    new_buf = NULL;
+    ssize_t new_size = len;
+    void *  new_mem = mem;
 
-    size_t new_size = afl->mutator->afl_custom_pre_save(afl->mutator->data, mem,
-                                                        len, &new_buf);
+    LIST_FOREACH(&afl->custom_mutator_list, struct custom_mutator, {
 
-    if (unlikely(!new_buf)) {
+      if (el->afl_custom_post_process) {
 
-      FATAL("Custom_pre_save failed (ret: %lu)", (long unsigned)new_size);
+        new_size =
+            el->afl_custom_post_process(el->data, new_mem, new_size, &new_buf);
+
+      }
+
+      new_mem = new_buf;
+
+    });
+
+    if (unlikely(!new_buf && (new_size <= 0))) {
+
+      FATAL("Custom_post_process failed (ret: %lu)", (long unsigned)new_size);
+
+    } else if (likely(new_buf)) {
+
+      /* everything as planned. use the new data. */
+      afl_fsrv_write_to_testcase(&afl->fsrv, new_buf, new_size);
+
+    } else {
+
+      /* custom mutators do not has a custom_post_process function */
+      afl_fsrv_write_to_testcase(&afl->fsrv, mem, len);
 
     }
-
-    /* everything as planned. use the new data. */
-    afl_fsrv_write_to_testcase(&afl->fsrv, new_buf, new_size);
 
   } else {
 
@@ -148,7 +191,7 @@ static void write_with_gap(afl_state_t *afl, void *mem, u32 len, u32 skip_at,
 u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
                   u32 handicap, u8 from_queue) {
 
-  u8 fault = 0, new_bits = 0, var_detected = 0,
+  u8 fault = 0, new_bits = 0, var_detected = 0, hnb = 0,
      first_run = (q->exec_cksum == 0);
 
   u64 start_us, stop_us;
@@ -193,7 +236,7 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
   if (q->exec_cksum) {
 
     memcpy(afl->first_trace, afl->fsrv.trace_bits, afl->fsrv.map_size);
-    u8 hnb = has_new_bits(afl, afl->virgin_bits);
+    hnb = has_new_bits(afl, afl->virgin_bits);
     if (hnb > new_bits) { new_bits = hnb; }
 
   }
@@ -228,10 +271,10 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
     }
 
     cksum = hash32(afl->fsrv.trace_bits, afl->fsrv.map_size, HASH_CONST);
-    u8 hnb = has_new_bits(afl, afl->virgin_bits);
-    if (hnb > new_bits) { new_bits = hnb; }
-
     if (q->exec_cksum != cksum) {
+
+      hnb = has_new_bits(afl, afl->virgin_bits);
+      if (hnb > new_bits) { new_bits = hnb; }
 
       if (q->exec_cksum) {
 
@@ -357,6 +400,20 @@ void sync_fuzzers(afl_state_t *afl) {
       continue;
 
     }
+
+    /*
+        // a slave only syncs from a master, a master syncs from everyone
+        if (likely(afl->is_slave)) {
+
+          u8 x = alloc_printf("%s/%s/is_master", afl->sync_dir, sd_ent->d_name);
+          int res = access(x, F_OK);
+          free(x);
+          if (res != 0)
+            continue;
+
+        }
+
+    */
 
     /* Skip anything that doesn't have a queue/ subdirectory. */
 
@@ -489,9 +546,23 @@ void sync_fuzzers(afl_state_t *afl) {
 u8 trim_case(afl_state_t *afl, struct queue_entry *q, u8 *in_buf) {
 
   /* Custom mutator trimmer */
-  if (afl->mutator && afl->mutator->afl_custom_trim) {
+  if (afl->custom_mutators_count) {
 
-    return trim_case_custom(afl, q, in_buf);
+    u8   trimmed_case = 0;
+    bool custom_trimmed = false;
+
+    LIST_FOREACH(&afl->custom_mutator_list, struct custom_mutator, {
+
+      if (el->afl_custom_trim) {
+
+        trimmed_case = trim_case_custom(afl, q, in_buf, el);
+        custom_trimmed = true;
+
+      }
+
+    });
+
+    if (custom_trimmed) return trimmed_case;
 
   }
 
@@ -632,18 +703,6 @@ abort_trimming:
 u8 common_fuzz_stuff(afl_state_t *afl, u8 *out_buf, u32 len) {
 
   u8 fault;
-
-  if (afl->post_handler) {
-
-    u8 *post_buf = NULL;
-
-    size_t post_len =
-        afl->post_handler(afl->post_data, out_buf, len, &post_buf);
-    if (!post_buf || !post_len) { return 0; }
-    out_buf = post_buf;
-    len = post_len;
-
-  }
 
   write_to_testcase(afl, out_buf, len);
 

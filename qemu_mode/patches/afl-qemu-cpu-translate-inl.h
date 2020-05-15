@@ -35,10 +35,10 @@
 #include "tcg.h"
 #include "tcg-op.h"
 
-#if TCG_TARGET_LONG_BITS == 64
-#define _DEFAULT_MO MO_64
+#if TCG_TARGET_REG_BITS == 64
+  #define _DEFAULT_MO MO_64
 #else
-#define _DEFAULT_MO MO_32
+  #define _DEFAULT_MO MO_32
 #endif
 
 static void afl_gen_compcov(target_ulong cur_loc, TCGv arg1, TCGv arg2,

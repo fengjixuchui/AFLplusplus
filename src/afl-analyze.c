@@ -27,7 +27,7 @@
 #define AFL_MAIN
 
 #ifdef __ANDROID__
-#include "android-ashmem.h"
+  #include "android-ashmem.h"
 #endif
 #include "config.h"
 #include "types.h"
@@ -723,7 +723,7 @@ static void set_up_environment(void) {
 
     }
 
-    prog_in = alloc_printf("%s/.afl-analyze-temp-%u", use_dir, getpid());
+    prog_in = alloc_printf("%s/.afl-analyze-temp-%u", use_dir, (u32)getpid());
 
   }
 

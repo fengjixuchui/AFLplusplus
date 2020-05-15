@@ -12,13 +12,13 @@ typedef long double max_align_t;
 #include "llvm/ADT/DenseSet.h"
 #if LLVM_VERSION_MAJOR > 3 || \
     (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR > 4)
-#include "llvm/IR/CFG.h"
-#include "llvm/IR/Dominators.h"
-#include "llvm/IR/DebugInfo.h"
+  #include "llvm/IR/CFG.h"
+  #include "llvm/IR/Dominators.h"
+  #include "llvm/IR/DebugInfo.h"
 #else
-#include "llvm/Support/CFG.h"
-#include "llvm/Analysis/Dominators.h"
-#include "llvm/DebugInfo.h"
+  #include "llvm/Support/CFG.h"
+  #include "llvm/Analysis/Dominators.h"
+  #include "llvm/DebugInfo.h"
 #endif
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
@@ -97,13 +97,12 @@ struct InsTrim : public ModulePass {
 
 #if LLVM_VERSION_MAJOR >= 4 || \
     (LLVM_VERSION_MAJOR == 4 && LLVM_VERSION_PATCH >= 1)
-#define AFL_HAVE_VECTOR_INTRINSICS 1
+  #define AFL_HAVE_VECTOR_INTRINSICS 1
 #endif
 
   bool runOnModule(Module &M) override {
 
     char be_quiet = 0;
-    int  ngram_size = 0;
 
     if ((isatty(2) && !getenv("AFL_QUIET")) || getenv("AFL_DEBUG") != NULL) {
 
@@ -134,15 +133,17 @@ struct InsTrim : public ModulePass {
 
     }
 
-    if (getenv("AFL_LLVM_INSTRIM_SKIPSINGLEBLOCK") != NULL)
+    if (getenv("AFL_LLVM_INSTRIM_SKIPSINGLEBLOCK") ||
+        getenv("AFL_LLVM_SKIPSINGLEBLOCK"))
       function_minimum_size = 2;
 
-    unsigned PrevLocSize = 0;
-    char *   ngram_size_str = getenv("AFL_LLVM_NGRAM_SIZE");
+    unsigned int PrevLocSize = 0;
+    char *       ngram_size_str = getenv("AFL_LLVM_NGRAM_SIZE");
     if (!ngram_size_str) ngram_size_str = getenv("AFL_NGRAM_SIZE");
     char *ctx_str = getenv("AFL_LLVM_CTX");
 
 #ifdef AFL_HAVE_VECTOR_INTRINSICS
+    unsigned int ngram_size = 0;
     /* Decide previous location vector size (must be a power of two) */
     VectorType *PrevLocTy;
 
@@ -159,9 +160,21 @@ struct InsTrim : public ModulePass {
     else
 #else
     if (ngram_size_str)
+#ifdef LLVM_VERSION_STRING
       FATAL(
           "Sorry, NGRAM branch coverage is not supported with llvm version %s!",
           LLVM_VERSION_STRING);
+#else
+#ifndef LLVM_VERSION_PATCH
+      FATAL(
+          "Sorry, NGRAM branch coverage is not supported with llvm version %d.%d.%d!",
+          LLVM_VERSION_MAJOR, LLVM_VERSION_MINOR, 0);
+#else
+      FATAL(
+          "Sorry, NGRAM branch coverage is not supported with llvm version %d.%d.%d!",
+          LLVM_VERSION_MAJOR, LLVM_VERSION_MINOR, LLVM_VERISON_PATCH);
+#endif
+#endif
 #endif
       PrevLocSize = 1;
 
@@ -195,17 +208,17 @@ struct InsTrim : public ModulePass {
 
 #ifdef AFL_HAVE_VECTOR_INTRINSICS
     if (ngram_size)
-#ifdef __ANDROID__
+  #ifdef __ANDROID__
       AFLPrevLoc = new GlobalVariable(
           M, PrevLocTy, /* isConstant */ false, GlobalValue::ExternalLinkage,
           /* Initializer */ nullptr, "__afl_prev_loc");
-#else
+  #else
       AFLPrevLoc = new GlobalVariable(
           M, PrevLocTy, /* isConstant */ false, GlobalValue::ExternalLinkage,
           /* Initializer */ nullptr, "__afl_prev_loc",
           /* InsertBefore */ nullptr, GlobalVariable::GeneralDynamicTLSModel,
           /* AddressSpace */ 0, /* IsExternallyInitialized */ false);
-#endif
+  #endif
     else
 #endif
 #ifdef __ANDROID__
@@ -340,6 +353,7 @@ struct InsTrim : public ModulePass {
           if (MS.find(&BB) == MS.end()) { continue; }
           IRBuilder<> IRB(&*BB.getFirstInsertionPt());
 
+#ifdef AFL_HAVE_VECTOR_INTRINSICS
           if (ngram_size) {
 
             LoadInst *PrevLoc = IRB.CreateLoad(AFLPrevLoc);
@@ -356,7 +370,10 @@ struct InsTrim : public ModulePass {
                 ->setMetadata(M.getMDKindID("nosanitize"),
                               MDNode::get(C, None));
 
-          } else {
+          } else
+
+#endif
+          {
 
             IRB.CreateStore(ConstantInt::get(Int32Ty, genLabel()), AFLPrevLoc);
 
@@ -394,7 +411,7 @@ struct InsTrim : public ModulePass {
               if ((callInst = dyn_cast<CallInst>(&IN))) {
 
                 Function *Callee = callInst->getCalledFunction();
-                if (!Callee || Callee->size() < 2)
+                if (!Callee || Callee->size() < function_minimum_size)
                   continue;
                 else {
 

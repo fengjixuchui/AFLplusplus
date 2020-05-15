@@ -52,10 +52,26 @@ endif
 
 ifneq "$(shell uname)" "Darwin"
  ifeq "$(shell echo 'int main() {return 0; }' | $(CC) $(CFLAGS) -Werror -x c - -march=native -o .test 2>/dev/null && echo 1 || echo 0 ; rm -f .test )" "1"
-	CFLAGS_OPT = -march=native
+	CFLAGS_OPT += -march=native
  endif
  # OS X does not like _FORTIFY_SOURCE=2
  CFLAGS_OPT += -D_FORTIFY_SOURCE=2
+endif
+
+ifdef STATIC
+  $(info Compiling static version of binaries)
+  # Disable python for static compilation to simplify things
+  PYTHON_OK=0
+  PYFLAGS=
+
+  CFLAGS_OPT += -static
+  LDFLAGS += -lm -lpthread -lz -lutil
+endif
+
+ifdef PROFILING
+  $(info Compiling with profiling information, for analysis: gprof ./afl-fuzz gmon.out > prof.txt)
+  CFLAGS_OPT += -pg -DPROFILING=1
+  LDFLAGS += -pg
 endif
 
 ifneq "$(shell uname -m)" "x86_64"
@@ -73,13 +89,23 @@ override CFLAGS += -Wall -g -Wno-pointer-sign -Wmissing-declarations\
 			  -I include/ -Werror -DAFL_PATH=\"$(HELPER_PATH)\" \
 			  -DBIN_PATH=\"$(BIN_PATH)\" -DDOC_PATH=\"$(DOC_PATH)\"
 
+ifeq "$(shell uname -s)" "OpenBSD"
+  override CFLAGS  += -I /usr/local/include/
+  LDFLAGS += -L /usr/local/lib/
+endif
+
+ifeq "$(shell uname -s)" "NetBSD"
+  override CFLAGS  += -I /usr/pkg/include/
+  LDFLAGS += -L /usr/pkg/lib/
+endif
+
 AFL_FUZZ_FILES = $(wildcard src/afl-fuzz*.c)
 
 ifneq "$(shell command -v python3m 2>/dev/null)" ""
   ifneq "$(shell command -v python3m-config 2>/dev/null)" ""
     PYTHON_INCLUDE  ?= $(shell python3m-config --includes)
     PYTHON_VERSION  ?= $(strip $(shell python3m --version 2>&1))
-    # Starting with python3.8, we need to pass the `embed` flag. Earier versions didn't know this flag.
+    # Starting with python3.8, we need to pass the `embed` flag. Earlier versions didn't know this flag.
     ifeq "$(shell python3m-config --embed --libs 2>/dev/null | grep -q lpython && echo 1 )" "1"
       PYTHON_LIB      ?= $(shell python3m-config --libs --embed --ldflags)
     else
@@ -142,23 +168,23 @@ else
 endif
 
 ifneq "$(filter Linux GNU%,$(shell uname))" ""
-  LDFLAGS  += -ldl
+  LDFLAGS += -ldl
 endif
 
 ifneq "$(findstring FreeBSD, $(shell uname))" ""
-  CFLAGS += -pthread
-  LDFLAGS  += -lpthread
+  CFLAGS  += -pthread
+  LDFLAGS += -lpthread
 endif
 
 ifneq "$(findstring NetBSD, $(shell uname))" ""
-  CFLAGS += -pthread
-  LDFLAGS  += -lpthread
+  CFLAGS  += -pthread
+  LDFLAGS += -lpthread
 endif
 
 ifeq "$(findstring clang, $(shell $(CC) --version 2>/dev/null))" ""
-  TEST_CC   = afl-gcc
+  TEST_CC  = afl-gcc
 else
-  TEST_CC   = afl-clang
+  TEST_CC  = afl-clang
 endif
 
 COMM_HDR    = include/alloc-inl.h include/config.h include/debug.h include/types.h
@@ -177,35 +203,22 @@ ifdef NO_PYTHON
 endif
 
 IN_REPO=0
-ifeq "$(shell git status >/dev/null 2>&1 && echo 1 || echo 0)" "1"
+ifeq "$(shell command -v git >/dev/null && git status >/dev/null 2>&1 && echo 1 || echo 0)" "1"
   IN_REPO=1
 endif
-ifeq "$(shell svn proplist . 2>/dev/null && echo 1 || echo 0)" "1"
+ifeq "$(shell command -v svn >/dev/null && svn proplist . 2>/dev/null && echo 1 || echo 0)" "1"
   IN_REPO=1
 endif
 
-ifdef STATIC
-  $(info Compiling static version of binaries)
-  # Disable python for static compilation to simplify things
-  PYTHON_OK=0
-  PYFLAGS=
-  COMPILE_STATIC = -static
-  LDFLAGS += -lm
+ifeq "$(shell echo 'int main() { return 0;}' | $(CC) $(CFLAGS) -fsanitize=address -x c - -o .test2 2>/dev/null && echo 1 || echo 0 ; rm -f .test2 )" "1"
+	ASAN_CFLAGS=-fsanitize=address -fstack-protector-all -fno-omit-frame-pointer
+	ASAN_LDFLAGS=-fsanitize=address -fstack-protector-all -fno-omit-frame-pointer
 endif
-
-ASAN_CFLAGS=-fsanitize=address -fstack-protector-all -fno-omit-frame-pointer
-ASAN_LDFLAGS+=-fsanitize=address -fstack-protector-all -fno-omit-frame-pointer
 
 ifdef ASAN_BUILD
   $(info Compiling ASAN version of binaries)
   CFLAGS+=$(ASAN_CFLAGS)
   LDFLAGS+=$(ASAN_LDFLAGS)
-endif
-
-ifdef PROFILING
-  $(info Compiling profiling version of binaries)
-  CFLAGS+=-pg
-  LDFLAGS+=-pg
 endif
 
 ifeq "$(shell echo '$(HASH)include <sys/ipc.h>@$(HASH)include <sys/shm.h>@int main() { int _id = shmget(IPC_PRIVATE, 65536, IPC_CREAT | IPC_EXCL | 0600); shmctl(_id, IPC_RMID, 0); return 0;}' | tr @ '\n' | $(CC) $(CFLAGS) -x c - -o .test2 2>/dev/null && echo 1 || echo 0 ; rm -f .test2 )" "1"
@@ -251,7 +264,7 @@ help:
 	@echo "deepclean: cleans everything including downloads"
 	@echo "code-format: format the code, do this before you commit and send a PR please!"
 	@echo "tests: this runs the test framework. It is more catered for the developers, but if you run into problems this helps pinpointing the problem"
-	@echo "unit: perform unit tests (based on cmocka)"
+	@echo "unit: perform unit tests (based on cmocka and GNU linker)"
 	@echo "document: creates afl-fuzz-document which will only do one run and save all manipulated inputs into out/queue/mutations"
 	@echo "help: shows these build options :-)"
 	@echo "=========================================="
@@ -384,7 +397,16 @@ unit_preallocable: test/unittests/unit_preallocable.o
 unit_clean:
 	@rm -f ./test/unittests/unit_preallocable ./test/unittests/unit_list ./test/unittests/unit_maybe_alloc test/unittests/*.o
 
+ifneq "$(shell uname)" "Darwin"
+
 unit: unit_maybe_alloc unit_preallocable unit_list unit_clean
+
+else
+
+unit:
+	@echo [-] unit tests are skipped on Darwin \(lacks GNU linker feature --wrap\)
+
+endif
 
 code-format:
 	./.custom-format.py -i src/*.c
@@ -438,7 +460,7 @@ all_done: test_build
 .NOTPARALLEL: clean all
 
 clean:
-	rm -f $(PROGS) libradamsa.so afl-fuzz-document afl-as as afl-g++ afl-clang afl-clang++ *.o src/*.o *~ a.out core core.[1-9][0-9]* *.stackdump .test .test1 .test2 test-instr .test-instr0 .test-instr1 afl-qemu-trace afl-gcc-fast afl-gcc-pass.so afl-gcc-rt.o afl-g++-fast ld *.so *.8 test/unittests/*.o test/unittests/unit_maybe_alloc test/unittests/preallocable
+	rm -f $(PROGS) libradamsa.so afl-fuzz-document afl-as as afl-g++ afl-clang afl-clang++ *.o src/*.o *~ a.out core core.[1-9][0-9]* *.stackdump .test .test1 .test2 test-instr .test-instr0 .test-instr1 afl-qemu-trace afl-gcc-fast afl-gcc-pass.so afl-gcc-rt.o afl-g++-fast ld *.so *.8 test/unittests/*.o test/unittests/unit_maybe_alloc test/unittests/preallocable .afl-*
 	rm -rf out_dir qemu_mode/qemu-3.1.1 *.dSYM */*.dSYM
 	-$(MAKE) -C llvm_mode clean
 	-$(MAKE) -C gcc_plugin clean
